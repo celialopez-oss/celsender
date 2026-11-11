@@ -208,7 +208,7 @@ export default function App() {
             </label>
             <input
               type="text"
-              placeholder="Ej: 991112223"
+              placeholder="Ej: 593912345678"
               value={inputPhoneCheck}
               onChange={(e) => setInputPhoneCheck(e.target.value)}
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
