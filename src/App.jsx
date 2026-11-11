@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // 🔑 TUS CREDENCIALES DE SUPABASE
@@ -13,29 +13,49 @@ export default function App() {
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   
-  const [currentStep, setCurrentStep] = useState(1);
+  // Recuperar paso actual de localStorage o iniciar en 1
+  const [currentStep, setCurrentStep] = useState(() => {
+    return Number(localStorage.getItem('celsender_step')) || 1;
+  });
+  
   const [countryCode, setCountryCode] = useState('593');
   
-  const [excelData, setExcelData] = useState([]);
-  const [fileName, setFileName] = useState('');
+  // Recuperar datos del Excel de localStorage si recarga la página
+  const [excelData, setExcelData] = useState(() => {
+    const saved = localStorage.getItem('celsender_excel');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [fileName, setFileName] = useState(() => {
+    return localStorage.getItem('celsender_filename') || '';
+  });
 
-  // Mensaje por defecto en blanco con placeholder
-  const [messageTemplate, setMessageTemplate] = useState('');
+  // Recuperar plantilla de mensaje de localStorage
+  const [messageTemplate, setMessageTemplate] = useState(() => {
+    return localStorage.getItem('celsender_template') || '';
+  });
 
   // Estado para llevar el control de qué contactos ya fueron enviados (semáforo)
-  const [sentStatuses, setSentStatuses] = useState({});
+  const [sentStatuses, setSentStatuses] = useState(() => {
+    const saved = localStorage.getItem('celsender_progress');
+    return saved ? JSON.parse(saved) : {};
+  });
 
-  // Mantener sesión activa si ya validó antes
+  // Guardar sesión y pasos automáticamente
   useEffect(() => {
     const savedAuth = localStorage.getItem('celsender_auth');
     if (savedAuth === 'true') {
       setIsAuthenticated(true);
     }
-    const savedProgress = localStorage.getItem('celsender_progress');
-    if (savedProgress) {
-      try { setSentStatuses(JSON.parse(savedProgress)); } catch(e){}
-    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('celsender_step', currentStep);
+  }, [currentStep]);
+
+  useEffect(() => {
+    localStorage.setItem('celsender_template', messageTemplate);
+  }, [messageTemplate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -81,6 +101,7 @@ export default function App() {
     const file = e.target.files[0];
     if (!file) return;
     setFileName(file.name);
+    localStorage.setItem('celsender_filename', file.name);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -113,6 +134,7 @@ export default function App() {
 
         if (formattedData.length > 0) {
           setExcelData(formattedData);
+          localStorage.setItem('celsender_excel', JSON.stringify(formattedData));
           setSentStatuses({});
           localStorage.removeItem('celsender_progress');
           alert(`¡Se cargaron exitosamente ${formattedData.length} contactos!`);
@@ -140,7 +162,6 @@ export default function App() {
     return msg;
   };
 
-  // Función para disparar el chat de WhatsApp y marcar como enviado
   const handleOpenChat = (client) => {
     let cleanNumber = client.telefono.replace(/\D/g, '');
     if (cleanNumber.startsWith('0') && cleanNumber.length === 10) {
@@ -169,44 +190,56 @@ export default function App() {
   // PANTALLA DE ACCESO
   if (!isAuthenticated) {
     return (
-      <div style={{ maxWidth: '420px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px', boxSizing: 'border-box' }}>
-        <div style={{ textAlign: 'center', marginTop: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
-            <Lock size={32} />
+      <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', boxSizing: 'border-box', position: 'relative' }}>
+        <div style={{ textAlign: 'center', marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+          <div style={{ padding: '14px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
+            <Lock size={28} />
           </div>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h2>
-          <p style={{ margin: 0, fontSize: '12px', color: '#666', padding: '0 10px' }}>
+          <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h2>
+          <p style={{ margin: 0, fontSize: '11px', color: '#666', padding: '0 10px' }}>
             Ingresa tu número celular autorizado para acceder a tu panel de envíos.
           </p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '40px' }}>
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6', marginBottom: '4px' }}>
               Número de Celular:
             </label>
             <input
               type="text"
-              placeholder="Ej: 593991112223"
+              placeholder="Ej: 991112223"
               value={inputPhoneCheck}
               onChange={(e) => setInputPhoneCheck(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
               required
             />
           </div>
           <button
             type="submit"
             disabled={loadingLogin}
-            style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
-            <ShieldCheck size={18} />
+            <ShieldCheck size={16} />
             <span>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</span>
           </button>
         </form>
 
-        <footer style={{ textAlign: 'center', fontSize: '11px', color: '#666' }}>
-          <p style={{ margin: 0 }}>© 2026 CelSender • <span style={{ color: '#5b9ea6', fontWeight: '500' }}>celiadigitalec</span></p>
+        {/* Footer visible y adaptado */}
+        <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '10px', color: '#666', borderRadius: '8px' }}>
+          <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
         </footer>
+
+        {/* Botón Flotante de Soporte WhatsApp (Reemplaza con tu número real, ej: 5939XXXXXXXX) */}
+        <a 
+          href="https://wa.me/593999999999?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
+          title="¿Dudas o sugerencias? Contáctame"
+        >
+          <MessageCircle size={26} />
+        </a>
       </div>
     );
   }
@@ -216,30 +249,29 @@ export default function App() {
   const sentCount = Object.keys(sentStatuses).length;
   const progressPercent = totalContacts > 0 ? Math.round((sentCount / totalContacts) * 100) : 0;
 
-  // Muestra una vista previa basada en el primer contacto del Excel (si existe)
   const sampleClient = excelData[0] || { nombre: 'María', telefono: '0999999999', deuda: '$45.00', nivel: 'VIP' };
   const previewMessage = getProcessedMessage(sampleClient);
 
   return (
-    <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', position: 'relative', paddingBottom: '20px' }}>
       
       {/* Header */}
-      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #93c4c8', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #93c4c8', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
-          <p style={{ margin: 0, fontSize: '11px', color: '#666' }}>Licencia Activa 🟢</p>
+          <h1 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
+          <p style={{ margin: 0, fontSize: '10px', color: '#666' }}>Licencia Activa 🟢</p>
         </div>
         <button
-          onClick={() => { setIsAuthenticated(false); localStorage.removeItem('celsender_auth'); }}
-          style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+          onClick={() => { setIsAuthenticated(false); localStorage.clear(); }}
+          style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '5px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}
         >
           Cerrar 🔒
         </button>
       </header>
 
       {/* Stepper */}
-      <div style={{ padding: '10px 16px 0 16px' }}>
-        <div style={{ backgroundColor: '#ffffff', padding: '8px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', justifyContent: 'space-around', fontSize: '12px', fontWeight: 'bold' }}>
+      <div style={{ padding: '8px 14px 0 14px' }}>
+        <div style={{ backgroundColor: '#ffffff', padding: '6px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', justifyContent: 'space-around', fontSize: '11px', fontWeight: 'bold' }}>
           <span style={{ color: currentStep === 1 ? '#5b9ea6' : '#999' }}>1. Excel</span>
           <span style={{ color: '#ccc' }}>→</span>
           <span style={{ color: currentStep === 2 ? '#5b9ea6' : '#999' }}>2. Mensaje</span>
@@ -248,25 +280,30 @@ export default function App() {
         </div>
       </div>
 
-      {/* Contenido */}
-      <main style={{ padding: '14px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Contenido Dinámico */}
+      <main style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
         
         {/* PASO 1: CARGAR EXCEL */}
         {currentStep === 1 && (
-          <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FileSpreadsheet size={16} style={{ color: '#5b9ea6' }} />
-              <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6' }}>Cargar Base de Contactos</h2>
+              <FileSpreadsheet size={15} style={{ color: '#5b9ea6' }} />
+              <h2 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>Cargar Base de Contactos</h2>
             </div>
 
-            <div style={{ border: '2px dashed #93c4c8', borderRadius: '8px', padding: '20px', textAlign: 'center', backgroundColor: '#faf8f5' }}>
-              <Upload size={24} style={{ color: '#5b9ea6', margin: '0 auto 8px auto', display: 'block' }} />
-              <p style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#444', fontWeight: '500' }}>
+            <div style={{ border: '2px dashed #93c4c8', borderRadius: '8px', padding: '16px', textAlign: 'center', backgroundColor: '#faf8f5' }}>
+              <Upload size={22} style={{ color: '#5b9ea6', margin: '0 auto 6px auto', display: 'block' }} />
+              <p style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#444', fontWeight: '500' }}>
                 {fileName ? `Excel: ${fileName}` : `Cargados: ${excelData.length} contactos`}
               </p>
-              <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
+              <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '10px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
                 <span>Subir archivo .xlsx</span>
-                <input type="file" accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleExcelUpload} style={{ display: 'none' }} />
+                <input 
+                  type="file" 
+                  accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                  onChange={handleExcelUpload} 
+                  style={{ display: 'none' }} 
+                />
               </label>
             </div>
 
@@ -275,23 +312,22 @@ export default function App() {
                 if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
                 setCurrentStep(2);
               }}
-              style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '6px' }}
+              style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
               <span>Continuar a Redactar</span>
-              <ArrowRight size={14} />
+              <ArrowRight size={13} />
             </button>
           </div>
         )}
 
-        {/* PASO 2: REDACTAR MENSAJE (SIN EMOJIS EXTRAS, CON VISTA PREVIA) */}
+        {/* PASO 2: REDACTAR MENSAJE */}
         {currentStep === 2 && (
-          <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <MessageSquare size={16} style={{ color: '#5b9ea6' }} />
-              <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6' }}>Plantilla de Mensaje</h2>
+              <MessageSquare size={15} style={{ color: '#5b9ea6' }} />
+              <h2 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>Plantilla de Mensaje</h2>
             </div>
 
-            {/* Botones de Variables */}
             <div>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '3px' }}>Variables del Excel:</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -299,7 +335,7 @@ export default function App() {
                   <button
                     key={v}
                     onClick={() => insertVariable(v)}
-                    style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', border: '1px solid #ebd1a6', cursor: 'pointer' }}
+                    style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '9px', fontWeight: 'bold', padding: '3px 6px', borderRadius: '4px', border: '1px solid #ebd1a6', cursor: 'pointer' }}
                   >
                     +{v}
                   </button>
@@ -307,34 +343,32 @@ export default function App() {
               </div>
             </div>
 
-            {/* Textarea Principal (Soporta emojis nativos del teclado del celular) */}
             <div>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '3px' }}>Redacta tu mensaje:</span>
               <textarea
-                rows="5"
+                rows="4"
                 placeholder="Escribe aquí tu mensaje..."
                 value={messageTemplate}
                 onChange={(e) => setMessageTemplate(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#faf8f5', fontSize: '11px', outline: 'none', color: '#2c3e40', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '7px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#faf8f5', fontSize: '11px', outline: 'none', color: '#2c3e40', boxSizing: 'border-box' }}
               />
             </div>
 
-            {/* VISTA PREVIA EN TIEMPO REAL */}
-            <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #86efac' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '4px' }}>
-                👁️ Vista previa (cómo lo verá tu cliente):
+            <div style={{ backgroundColor: '#f0fdf4', padding: '8px', borderRadius: '8px', border: '1px solid #86efac' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '2px' }}>
+                👁️ Vista previa:
               </span>
-              <p style={{ margin: 0, fontSize: '11px', color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {previewMessage || <span style={{ color: '#888', fontStyle: 'italic' }}>Escribe algo arriba para ver la vista previa...</span>}
+              <p style={{ margin: 0, fontSize: '10px', color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {previewMessage || <span style={{ color: '#888', fontStyle: 'italic' }}>Escribe algo arriba...</span>}
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
               <button
                 onClick={() => setCurrentStep(1)}
-                style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '7px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
               >
-                <ArrowLeft size={14} />
+                <ArrowLeft size={12} />
                 <span>Atrás</span>
               </button>
               <button
@@ -343,10 +377,10 @@ export default function App() {
                   if (!messageTemplate.trim()) { alert('Por favor escribe un mensaje antes de continuar.'); return; }
                   setCurrentStep(3);
                 }}
-                style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '7px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
               >
-                <span>Ir a la Cola de Envíos</span>
-                <ArrowRight size={14} />
+                <span>Ir a Envíos</span>
+                <ArrowRight size={12} />
               </button>
             </div>
           </div>
@@ -354,26 +388,26 @@ export default function App() {
 
         {/* PASO 3: CONTROL DE ENVÍOS SEMÁFORO */}
         {currentStep === 3 && (
-          <div style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Send size={16} style={{ color: '#5b9ea6' }} />
-                <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6' }}>Cola de Envíos (Semáforo)</h2>
+                <Send size={15} style={{ color: '#5b9ea6' }} />
+                <h2 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>Cola de Envíos (Semáforo)</h2>
               </div>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ backgroundColor: '#f9f0c3', color: '#5b9ea6', fontSize: '10px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '8px', border: '1px solid #ebd1a6' }}>
+                <span style={{ backgroundColor: '#f9f0c3', color: '#5b9ea6', fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '8px', border: '1px solid #ebd1a6' }}>
                   {sentCount} / {totalContacts} ({progressPercent}%)
                 </span>
                 <button onClick={resetProgress} title="Reiniciar progreso" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e06d6d', padding: 0 }}>
-                  <RotateCcw size={14} />
+                  <RotateCcw size={13} />
                 </button>
               </div>
             </div>
 
             {excelData.length === 0 ? (
-              <p style={{ fontSize: '11px', color: '#666', textAlign: 'center', padding: '20px 0' }}>No hay contactos cargados. Vuelve al Paso 1.</p>
+              <p style={{ fontSize: '11px', color: '#666', textAlign: 'center', padding: '15px 0' }}>No hay contactos cargados. Vuelve al Paso 1.</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
                 {excelData.map((client) => {
                   const isSent = sentStatuses[client.id] === true;
                   return (
@@ -381,13 +415,13 @@ export default function App() {
                       key={client.id} 
                       style={{ 
                         backgroundColor: isSent ? '#f0fdf4' : '#faf8f5', 
-                        padding: '8px 10px', 
+                        padding: '7px 9px', 
                         borderRadius: '8px', 
                         border: `1px solid ${isSent ? '#86efac' : '#93c4c8'}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '8px'
+                        gap: '6px'
                       }}
                     >
                       <div style={{ overflow: 'hidden', flex: 1 }}>
@@ -405,18 +439,18 @@ export default function App() {
                           backgroundColor: isSent ? '#10b981' : '#5b9ea6',
                           color: '#ffffff',
                           border: 'none',
-                          padding: '6px 10px',
+                          padding: '5px 8px',
                           borderRadius: '6px',
                           fontSize: '10px',
                           fontWeight: 'bold',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '3px',
                           whiteSpace: 'nowrap'
                         }}
                       >
-                        <ExternalLink size={12} />
+                        <ExternalLink size={11} />
                         <span>{isSent ? 'Reenviar' : 'Enviar'}</span>
                       </button>
                     </div>
@@ -427,7 +461,7 @@ export default function App() {
 
             <button
               onClick={() => setCurrentStep(2)}
-              style={{ width: '100%', backgroundColor: '#faf8f5', color: '#5b9ea6', border: '1px solid #93c4c8', padding: '8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', marginTop: '4px' }}
+              style={{ width: '100%', backgroundColor: '#faf8f5', color: '#5b9ea6', border: '1px solid #93c4c8', padding: '7px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: '2px' }}
             >
               ← Volver al Redactor
             </button>
@@ -435,10 +469,21 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #93c4c8', padding: '8px', textAlign: 'center', fontSize: '10px', color: '#666' }}>
-        <p style={{ margin: 0 }}>© 2026 CelSender • <span style={{ color: '#5b9ea6', fontWeight: '500' }}>celiadigitalec</span></p>
+      {/* Footer Presumible y Visible */}
+      <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #93c4c8', padding: '10px 14px', textAlign: 'center', fontSize: '10px', color: '#666', margin: '0 14px', borderRadius: '8px' }}>
+        <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
       </footer>
+
+      {/* Botón Flotante de WhatsApp para Dudas / Soporte */}
+      <a 
+        href="https://wa.me/593999999999?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
+        title="¿Dudas o sugerencias? Contáctame"
+      >
+        <MessageCircle size={26} />
+      </a>
     </div>
   );
 }
