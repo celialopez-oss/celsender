@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "CelSender - WhatsApp Outreach",
+  "version": "1.0",
+  "description": "Extensión automatizada para WhatsApp Web",
+  "permissions": [
+    "tabs",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
