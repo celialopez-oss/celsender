@@ -187,7 +187,7 @@ export default function App() {
             </label>
             <input
               type="text"
-              placeholder="Ej: 991112223"
+              placeholder="Ej: 593991112223"
               value={inputPhoneCheck}
               onChange={(e) => setInputPhoneCheck(e.target.value)}
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
@@ -266,7 +266,7 @@ export default function App() {
               </p>
               <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
                 <span>Subir archivo .xlsx</span>
-                <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} style={{ display: 'none' }} />
+                <input type="file" accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleExcelUpload} style={{ display: 'none' }} />
               </label>
             </div>
 
