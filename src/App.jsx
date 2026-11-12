@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // 🔑 TUS CREDENCIALES DE SUPABASE
@@ -9,7 +9,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_G_Vvo4v1DFXFJy-ojrCLZA_rCbLPSeP";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export default function App() {
-  // Candado de licencia amarrado al número que inició sesión
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('celsender_auth') === 'true';
   });
@@ -25,7 +24,6 @@ export default function App() {
     return Number(localStorage.getItem('celsender_step')) || 1;
   });
   
-  // Selector de Código de País dinámico
   const [countryCode, setCountryCode] = useState(() => {
     return localStorage.getItem('celsender_country') || '593';
   });
@@ -35,7 +33,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Lista dinámica de las columnas detectadas en el Excel
   const [excelColumns, setExcelColumns] = useState(() => {
     const saved = localStorage.getItem('celsender_columns');
     return saved ? JSON.parse(saved) : [];
@@ -96,7 +93,6 @@ export default function App() {
         }
       }
 
-      // Guardamos la sesión y amarramos el número exacto
       setIsAuthenticated(true);
       setLoggedPhone(cleanInput);
       localStorage.setItem('celsender_auth', 'true');
@@ -125,17 +121,15 @@ export default function App() {
         const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (jsonRows.length === 0) {
-          alert('El archivo de Excel está vacío.');
+          alert('El archivo de Excel está vacío o no es un formato válido.');
           return;
         }
 
-        // Extraer dinámicamente TODAS las columnas del Excel real
         const firstRow = jsonRows[0];
         const detectedColumns = Object.keys(firstRow).map(col => col.trim());
         setExcelColumns(detectedColumns);
         localStorage.setItem('celsender_columns', JSON.stringify(detectedColumns));
 
-        // Mapear filas conservando TODA la información de sus columnas
         const formattedData = jsonRows.map((row, index) => {
           const normalizedRow = { id: index };
           Object.keys(row).forEach((key) => {
@@ -144,7 +138,6 @@ export default function App() {
           });
           return normalizedRow;
         }).filter(row => {
-          // Buscar una columna que parezca teléfono (contenga tel, cel, phone, movil o números)
           const phoneKey = Object.keys(row).find(k => /tel|cel|phone|movil|whatsapp/i.test(k)) || Object.keys(row)[1];
           return row[phoneKey] && row[phoneKey] !== '';
         });
@@ -156,24 +149,22 @@ export default function App() {
           localStorage.removeItem('celsender_progress');
           alert(`¡Excel cargado! Se detectaron ${detectedColumns.length} columnas y ${formattedData.length} contactos.`);
         } else {
-          alert('No se pudo identificar una columna de teléfono válida en el Excel.');
+          alert('No se pudo identificar una columna de teléfono válida en el archivo.');
         }
       } catch (error) {
         console.error(error);
-        alert('Hubo un error al leer el archivo Excel.');
+        alert('Hubo un error al leer el archivo. Asegúrate de que sea un Excel (.xlsx o .xls).');
       }
     };
     reader.readAsArrayBuffer(file);
   };
 
-  // Insertar cualquier columna dinámica como variable (ej: {Deuda}, {Puntos}, etc.)
   const insertVariable = (colName) => {
     setMessageTemplate((prev) => prev + ` {${colName}}`);
   };
 
   const getProcessedMessage = (client) => {
     let msg = messageTemplate;
-    // Reemplazar dinámicamente cualquier llave {Columna} con el valor real de esa fila
     Object.keys(client).forEach((key) => {
       const regex = new RegExp(`{${key}}`, 'gi');
       msg = msg.replace(regex, client[key] || '');
@@ -182,7 +173,6 @@ export default function App() {
   };
 
   const handleOpenChat = (client) => {
-    // Buscar dinámicamente qué columna es la del teléfono
     const phoneKey = Object.keys(client).find(k => /tel|cel|phone|movil|whatsapp/i.test(k)) || Object.keys(client)[1];
     let rawPhone = String(client[phoneKey] || '').replace(/\D/g, '');
 
@@ -208,7 +198,6 @@ export default function App() {
     }
   };
 
-  // PANTALLA DE ACCESO
   if (!isAuthenticated) {
     return (
       <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', gap: '20px' }}>
@@ -273,7 +262,7 @@ export default function App() {
     <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', position: 'relative', padding: '12px' }}>
       
       <div>
-        {/* Header con advertencia de cuenta amarrada */}
+        {/* Header */}
         <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #93c4c8', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px', marginBottom: '10px' }}>
           <div>
             <h1 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
@@ -334,11 +323,12 @@ export default function App() {
                 <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: '#444', fontWeight: '500' }}>
                   {fileName ? `Excel: ${fileName}` : `Cargados: ${excelData.length} contactos`}
                 </p>
+                {/* EXPLORADOR GENERAL ABIERTO A CUALQUIER UBICACIÓN */}
                 <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '7px 12px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
-                  <span>Subir archivo .xlsx (Cualquier columna)</span>
+                  <span>Subir archivo Excel</span>
                   <input 
                     type="file" 
-                    accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                    accept="*/*" 
                     onChange={handleExcelUpload} 
                     style={{ display: 'none' }} 
                   />
@@ -522,7 +512,7 @@ export default function App() {
         </main>
       </div>
 
-      {/* Footer Visible y Elegante */}
+      {/* Footer */}
       <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px 14px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px', marginTop: '10px' }}>
         <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
       </footer>
