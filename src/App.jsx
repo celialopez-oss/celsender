@@ -156,7 +156,7 @@ export default function App() {
     }
   };
 
-  // Guardar o Actualizar Usuario Registrado (con Nombre y Teléfono)
+ // Guardar o Actualizar Usuario Registrado
   const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!newAdminPhone || !newAdminExpiry) {
@@ -166,22 +166,34 @@ export default function App() {
 
     const cleanPhone = newAdminPhone.trim().replace(/^0/, '');
     const userName = newName.trim() || 'Sin Nombre';
+    const formattedExpiry = newAdminExpiry.includes('T') 
+      ? newAdminExpiry 
+      : `${newAdminExpiry}T23:59:59+00:00`;
 
     try {
       if (editingUserId) {
-        // Editar usuario existente
+        // Editar usuario existente usando client_name
         const { error } = await supabase
           .from('authorized_users')
-          .update({ name: userName, phone: cleanPhone, expiry_date: newAdminExpiry })
+          .update({ 
+            client_name: userName, 
+            phone: cleanPhone, 
+            expiry_date: formattedExpiry 
+          })
           .eq('id', editingUserId);
 
         if (error) throw error;
         alert('✅ ¡Usuario actualizado exitosamente!');
       } else {
-        // Crear nuevo usuario
+        // Crear nuevo usuario usando client_name y is_active
         const { error } = await supabase
           .from('authorized_users')
-          .insert([{ name: userName, phone: cleanPhone, expiry_date: newAdminExpiry }]);
+          .insert([{ 
+            client_name: userName, 
+            phone: cleanPhone, 
+            expiry_date: formattedExpiry,
+            is_active: true
+          }]);
 
         if (error) throw error;
         alert('✅ ¡Usuario registrado exitosamente!');
@@ -194,16 +206,17 @@ export default function App() {
       fetchAdminUsers();
     } catch (err) {
       console.error(err);
-      alert('Error al guardar el usuario en Supabase.');
+      alert(`Error de Supabase: ${err.message}`);
     }
   };
 
   // Preparar datos para editar usuario
   const handleStartEdit = (user) => {
     setEditingUserId(user.id);
-    setNewName(user.name || '');
+    setNewName(user.client_name || '');
     setNewAdminPhone(user.phone || '');
-    setNewAdminExpiry(user.expiry_date || '');
+    const dateOnly = user.expiry_date ? user.expiry_date.split('T')[0] : '';
+    setNewAdminExpiry(dateOnly);
   };
 
   // Cancelar edición
@@ -229,99 +242,6 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('Error al eliminar el usuario.');
-    }
-  };
-
-  const handleExcelUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setFileName(file.name);
-    localStorage.setItem('celsender_filename', file.name);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
-        if (jsonRows.length === 0) {
-          alert('El archivo de Excel está vacío o no es un formato válido.');
-          return;
-        }
-
-        const firstRow = jsonRows[0];
-        const detectedColumns = Object.keys(firstRow).map(col => col.trim());
-        setExcelColumns(detectedColumns);
-        localStorage.setItem('celsender_columns', JSON.stringify(detectedColumns));
-
-        const formattedData = jsonRows.map((row, index) => {
-          const normalizedRow = { id: index };
-          Object.keys(row).forEach((key) => {
-            const cleanKey = key.trim();
-            normalizedRow[cleanKey] = String(row[key]).trim();
-          });
-          return normalizedRow;
-        }).filter(row => {
-          const phoneKey = Object.keys(row).find(k => /tel|cel|phone|movil|whatsapp/i.test(k)) || Object.keys(row)[1];
-          return row[phoneKey] && row[phoneKey] !== '';
-        });
-
-        if (formattedData.length > 0) {
-          setExcelData(formattedData);
-          localStorage.setItem('celsender_excel', JSON.stringify(formattedData));
-          setSentStatuses({});
-          localStorage.removeItem('celsender_progress');
-          alert(`¡Excel cargado! Se detectaron ${detectedColumns.length} columnas y ${formattedData.length} contactos.`);
-        } else {
-          alert('No se pudo identificar una columna de teléfono válida en el archivo.');
-        }
-      } catch (error) {
-        console.error(error);
-        alert('Hubo un error al leer el archivo. Asegúrate de que sea un Excel (.xlsx o .xls).');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const insertVariable = (colName) => {
-    setMessageTemplate((prev) => prev + ` {${colName}}`);
-  };
-
-  const getProcessedMessage = (client) => {
-    let msg = messageTemplate;
-    Object.keys(client).forEach((key) => {
-      const regex = new RegExp(`{${key}}`, 'gi');
-      msg = msg.replace(regex, client[key] || '');
-    });
-    return msg;
-  };
-
-  const handleOpenChat = (client) => {
-    const phoneKey = Object.keys(client).find(k => /tel|cel|phone|movil|whatsapp/i.test(k)) || Object.keys(client)[1];
-    let rawPhone = String(client[phoneKey] || '').replace(/\D/g, '');
-
-    if (rawPhone.startsWith('0') && rawPhone.length >= 9) {
-      rawPhone = rawPhone.substring(1);
-    }
-    
-    const cleanNumber = countryCode + rawPhone;
-    const finalMsg = getProcessedMessage(client);
-    const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(finalMsg)}`;
-
-    window.open(whatsappUrl, '_blank');
-
-    const updatedStatuses = { ...sentStatuses, [client.id]: true };
-    setSentStatuses(updatedStatuses);
-    localStorage.setItem('celsender_progress', JSON.stringify(updatedStatuses));
-  };
-
-  const resetProgress = () => {
-    if (window.confirm('¿Deseas reiniciar el progreso de todos los envíos?')) {
-      setSentStatuses({});
-      localStorage.removeItem('celsender_progress');
     }
   };
 
@@ -437,10 +357,13 @@ export default function App() {
                   {filteredAdminUsers.map((u) => (
                     <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: '#faf8f5', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px' }}>
                       <div>
-                        <strong style={{ color: '#2c3e40', fontSize: '12px' }}>👤 {u.name || 'Sin Nombre'}</strong>
-                        <div style={{ color: '#5b9ea6' }}>+{u.phone}</div>
-                        <div style={{ fontSize: '9px', color: '#666' }}>Expira: {u.expiry_date || 'Sin límite'}</div>
-                      </div>
+                        <div>
+                          <strong style={{ color: '#2c3e40', fontSize: '12px' }}>👤 {u.client_name || 'Sin Nombre'}</strong>
+                          <div style={{ color: '#5b9ea6' }}>+{u.phone}</div>
+                          <div style={{ fontSize: '9px', color: '#666' }}>
+                              Expira: {u.expiry_date ? u.expiry_date.split('T')[0] : 'Sin límite'}
+                            </div>
+                          </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
                           onClick={() => handleStartEdit(u)}
