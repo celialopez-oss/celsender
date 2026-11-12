@@ -78,6 +78,64 @@ export default function App() {
     localStorage.setItem('celsender_country', countryCode);
   }, [countryCode]);
 
+  useEffect(() => {
+    localStorage.setItem('celsender_progress', JSON.stringify(sentStatuses));
+  }, [sentStatuses]);
+
+  // Manejador para subir el archivo Excel
+  const handleExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    localStorage.setItem('celsender_filename', file.name);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        if (data.length > 0) {
+          const columns = Object.keys(data[0]);
+          setExcelColumns(columns);
+          localStorage.setItem('celsender_columns', JSON.stringify(columns));
+
+          setExcelData(data);
+          localStorage.setItem('celsender_excel', JSON.stringify(data));
+          
+          setSentStatuses({});
+          localStorage.removeItem('celsender_progress');
+          alert(`✅ ¡Archivo cargado con éxito! Se encontraron ${data.length} contactos.`);
+        } else {
+          alert('⚠️ El archivo Excel está vacío.');
+        }
+      } catch (error) {
+        console.error(error);
+        alert('❌ Error al procesar el archivo Excel.');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // Insertar variable de columna en la plantilla de mensaje
+  const insertVariable = (col) => {
+    setMessageTemplate((prev) => `${prev} {${col}}`);
+  };
+
+  // Procesar mensaje con los datos del contacto
+  const getProcessedMessage = (row) => {
+    let msg = messageTemplate;
+    Object.keys(row).forEach((key) => {
+      const regex = new RegExp(`{${key}}`, 'g');
+      msg = msg.replace(regex, row[key] !== undefined ? row[key] : '');
+    });
+    return msg;
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const cleanInput = inputPhoneCheck.trim().replace(/^0/, '');
@@ -123,7 +181,6 @@ export default function App() {
   // Validar contraseña secreta desde el modal flotante
   const handleVerifyPassword = (e) => {
     e.preventDefault();
-    // 🔑 CONTRASEÑA DE ADMINISTRADORA
     const MASTER_PASSWORD = 'admin123';
 
     if (adminPasswordInput === MASTER_PASSWORD) {
@@ -218,7 +275,6 @@ export default function App() {
     setNewName(user.client_name || '');
     setNewAdminPhone(user.phone || '');
     
-    // Extrae únicamente la parte "YYYY-MM-DD" para que el input tipo date no falle
     const dateOnly = user.expiry_date ? user.expiry_date.split('T')[0] : '';
     setNewAdminExpiry(dateOnly);
   };
@@ -252,7 +308,7 @@ export default function App() {
   // Filtrar usuarios registrados por el buscador (nombre o teléfono)
   const filteredAdminUsers = adminUsersList.filter(u => {
     const query = searchQuery.toLowerCase();
-    const nameMatch = (u.name || '').toLowerCase().includes(query);
+    const nameMatch = (u.client_name || '').toLowerCase().includes(query);
     const phoneMatch = (u.phone || '').toLowerCase().includes(query);
     return nameMatch || phoneMatch;
   });
@@ -262,7 +318,6 @@ export default function App() {
     return (
       <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', boxSizing: 'border-box', position: 'relative' }}>
         
-        {/* ENCABEZADO CON ENGRANAJE ARRIBA */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px' }}>
           <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
           <button 
@@ -274,7 +329,6 @@ export default function App() {
           </button>
         </header>
 
-        {/* MODO PANEL DE ADMINISTRADOR */}
         {isAdminMode ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f0c3', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ebd1a6' }}>
@@ -287,7 +341,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Formulario de Agregar / Editar Usuario */}
             <form onSubmit={handleSaveUser} style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>
                 {editingUserId ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario'}
@@ -335,7 +388,6 @@ export default function App() {
               </div>
             </form>
 
-            {/* Buscador de Usuarios */}
             <div style={{ position: 'relative' }}>
               <Search size={16} style={{ position: 'absolute', top: '10px', left: '10px', color: '#888' }} />
               <input 
@@ -347,7 +399,6 @@ export default function App() {
               />
             </div>
 
-            {/* Lista de Usuarios Registrados */}
             <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', flex: 1, maxHeight: '200px', overflowY: 'auto' }}>
               <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '6px' }}>
                 Usuarios Registrados ({filteredAdminUsers.length}):
@@ -365,9 +416,10 @@ export default function App() {
                           <strong style={{ color: '#2c3e40', fontSize: '12px' }}>👤 {u.client_name || 'Sin Nombre'}</strong>
                           <div style={{ color: '#5b9ea6' }}>+{u.phone}</div>
                           <div style={{ fontSize: '9px', color: '#666' }}>
-                              Expira: {u.expiry_date ? u.expiry_date.split('T')[0] : 'Sin límite'}
-                            </div>
+                            Expira: {u.expiry_date ? u.expiry_date.split('T')[0] : 'Sin límite'}
                           </div>
+                        </div>
+                      </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
                           onClick={() => handleStartEdit(u)}
@@ -391,7 +443,6 @@ export default function App() {
             </div>
           </div>
         ) : (
-          /* VISTA NORMAL DE LOGIN */
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, gap: '20px' }}>
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
@@ -429,7 +480,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL FLOTANTE PARA PEDIR CONTRASEÑA DE ADMIN */}
         {showPasswordModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box' }}>
             <div style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
@@ -523,7 +573,6 @@ export default function App() {
                 <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Base de Datos</h2>
               </div>
 
-              {/* Selector de Código de País */}
               <div style={{ backgroundColor: '#faf8f5', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>
                   <Globe size={16} />
@@ -548,7 +597,6 @@ export default function App() {
                 <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: '#444', fontWeight: '500' }}>
                   {fileName ? `Excel: ${fileName}` : `Cargados: ${excelData.length} contactos`}
                 </p>
-                {/* EXPLORADOR GENERAL ABIERTO A CUALQUIER UBICACIÓN */}
                 <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '7px 12px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
                   <span>Sube tu Archivo</span>
                   <input 
@@ -649,108 +697,99 @@ export default function App() {
             </div>
           )}
 
-          {/* PASO 3: CONTROL DE ENVÍOS SEMÁFORO */}
+          {/* PASO 3: ENVÍO DE MENSAJES */}
           {currentStep === 3 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Send size={18} style={{ color: '#5b9ea6' }} />
-                  <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Cola de Envíos (Semáforo)</h2>
+                  <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Centro de Envíos</h2>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ backgroundColor: '#f9f0c3', color: '#5b9ea6', fontSize: '11px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '6px', border: '1px solid #ebd1a6' }}>
-                    {sentCount} / {totalContacts} ({progressPercent}%)
-                  </span>
-                  <button onClick={resetProgress} title="Reiniciar progreso" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e06d6d', padding: 0 }}>
-                    <RotateCcw size={14} />
-                  </button>
-                </div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
+                  {sentCount} / {totalContacts} enviados ({progressPercent}%)
+                </span>
               </div>
 
-              {excelData.length === 0 ? (
-                <p style={{ fontSize: '12px', color: '#666', textAlign: 'center', padding: '16px 0' }}>No hay contactos cargados. Vuelve al Paso 1.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
-                  {excelData.map((client) => {
-                    const isSent = sentStatuses[client.id] === true;
-                    const clientMessage = getProcessedMessage(client);
-                    const nameKey = Object.keys(client).find(k => /nombre|name|cliente/i.test(k)) || Object.keys(client)[0];
-                    const displayName = client[nameKey] || `Cliente ${client.id + 1}`;
+              {/* Barra de Progreso */}
+              <div style={{ width: '100%', backgroundColor: '#eee', borderRadius: '6px', height: '8px', overflow: 'hidden' }}>
+                <div style={{ width: `${progressPercent}%`, backgroundColor: '#5b9ea6', height: '100%', transition: 'width 0.3s ease' }} />
+              </div>
 
-                    return (
-                      <div 
-                        key={client.id} 
-                        style={{ 
-                          backgroundColor: isSent ? '#f0fdf4' : '#faf8f5', 
-                          padding: '9px 12px', 
-                          borderRadius: '8px', 
-                          border: `1px solid ${isSent ? '#86efac' : '#93c4c8'}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px'
-                        }}
-                      >
-                        <div style={{ overflow: 'hidden', flex: 1 }}>
-                          <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#2c3e40', marginBottom: '2px' }}>
-                            👤 {displayName} {isSent && '✅'}
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: 'italic' }}>
-                            "{clientMessage || 'Sin mensaje'}"
-                          </div>
-                        </div>
+              {/* Lista de Contactos para Enviar */}
+              <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #ddd', padding: '8px', borderRadius: '8px', backgroundColor: '#faf8f5' }}>
+                {excelData.map((row, index) => {
+                  const phoneKey = Object.keys(row).find(k => /cel|tel|phone|whatsapp|numero/i.test(k)) || Object.keys(row)[0];
+                  const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
+                  const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
+                  const clientName = row['Nombre'] || row['Client'] || row['client_name'] || `Contacto ${index + 1}`;
+                  const isSent = sentStatuses[index];
+                  const message = getProcessedMessage(row);
+                  const whatsappUrl = `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`;
 
-                        <button
-                          onClick={() => handleOpenChat(client)}
-                          style={{
-                            backgroundColor: isSent ? '#10b981' : '#5b9ea6',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '6px 10px',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          <ExternalLink size={12} />
-                          <span>{isSent ? 'Reenviar' : 'Enviar'}</span>
-                        </button>
+                  return (
+                    <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: isSent ? '#f0fdf4' : '#ffffff', borderRadius: '6px', border: '1px solid', borderColor: isSent ? '#86efac' : '#ddd', fontSize: '11px' }}>
+                      <div style={{ overflow: 'hidden', marginRight: '8px' }}>
+                        <strong style={{ color: '#2c3e40', display: 'block' }}>{clientName}</strong>
+                        <span style={{ color: '#666', fontSize: '10px' }}>+{finalPhone}</span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            setSentStatuses(prev => ({ ...prev, [index]: true }));
+                          }}
+                          style={{ backgroundColor: '#25D366', color: '#fff', padding: '6px 10px', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                        >
+                          <Send size={12} />
+                          <span>{isSent ? 'Reenviar' : 'Enviar'}</span>
+                        </a>
+                        {isSent && <CheckCircle2 size={16} style={{ color: '#166534' }} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-              <button
-                onClick={() => setCurrentStep(2)}
-                style={{ width: '100%', backgroundColor: '#faf8f5', color: '#5b9ea6', border: '1px solid #93c4c8', padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-              >
-                ← Volver al Redactor
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Atrás</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('¿Deseas reiniciar el progreso de envíos?')) {
+                      setSentStatuses({});
+                      localStorage.removeItem('celsender_progress');
+                    }
+                  }}
+                  style={{ flex: 1, backgroundColor: '#e06d6d', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  <RotateCcw size={14} />
+                  <span>Reiniciar Progreso</span>
+                </button>
+              </div>
             </div>
           )}
+
         </main>
       </div>
 
-      {/* Footer */}
-      <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px 14px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px', marginTop: '10px' }}>
+      <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px' }}>
         <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
       </footer>
 
-      {/* Botón Flotante de WhatsApp */}
       <a 
         href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
         target="_blank" 
         rel="noopener noreferrer"
-        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
-        title="¿Dudas o sugerencias? Contáctame"
+        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
       >
-        <MessageCircle size={26} />
+        <MessageCircle size={28} />
       </a>
     </div>
   );
