@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe, Settings, UserPlus, Trash2, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // 🔑 TUS CREDENCIALES DE SUPABASE
@@ -19,6 +19,14 @@ export default function App() {
 
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
+  
+  // Estados para el Panel de Administrador Secreto
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminUsersList, setAdminUsersList] = useState([]);
+  const [newAdminPhone, setNewAdminPhone] = useState('');
+  const [newAdminExpiry, setNewAdminExpiry] = useState('');
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(() => {
     return Number(localStorage.getItem('celsender_step')) || 1;
@@ -102,6 +110,85 @@ export default function App() {
       alert('Error de conexión al validar el número.');
     } finally {
       setLoadingLogin(false);
+    }
+  };
+
+  // Función para abrir el panel admin con contraseña
+  const handleAdminAccess = (e) => {
+    e.preventDefault();
+    // 🔑 AQUÍ PUEDES CAMBIAR TU CONTRASEÑA DE ADMINISTRADORA
+    const MASTER_PASSWORD = 'celia1704'; 
+
+    if (adminPassword === MASTER_PASSWORD) {
+      setIsAdminMode(true);
+      fetchAdminUsers();
+    } else {
+      alert('❌ Contraseña de administradora incorrecta.');
+      setAdminPassword('');
+    }
+  };
+
+  // Cargar lista de usuarias desde Supabase para administrarlas
+  const fetchAdminUsers = async () => {
+    setLoadingAdmin(true);
+    try {
+      const { data, error } = await supabase
+        .from('authorized_users')
+        .select('*')
+        .order('expiry_date', { ascending: false });
+
+      if (error) throw error;
+      setAdminUsersList(data || []);
+    } catch (err) {
+      console.error(err);
+      alert('Error al cargar la lista de usuarias.');
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
+
+  // Agregar nueva usuaria autorizada desde el panel admin móvil
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!newAdminPhone || !newAdminExpiry) {
+      alert('Por favor completa el número y la fecha de expiración.');
+      return;
+    }
+
+    const cleanPhone = newAdminPhone.trim().replace(/^0/, '');
+
+    try {
+      const { error } = await supabase
+        .from('authorized_users')
+        .insert([{ phone: cleanPhone, expiry_date: newAdminExpiry }]);
+
+      if (error) throw error;
+
+      alert('✅ ¡Licencia agregada exitosamente!');
+      setNewAdminPhone('');
+      setNewAdminExpiry('');
+      fetchAdminUsers();
+    } catch (err) {
+      console.error(err);
+      alert('Error al agregar el usuario a Supabase.');
+    }
+  };
+
+  // Eliminar o revocar licencia
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm('¿Deseas revocar y eliminar esta licencia?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('authorized_users')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      fetchAdminUsers();
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar la licencia.');
     }
   };
 
@@ -198,49 +285,138 @@ export default function App() {
     }
   };
 
+  // PANTALLA DE ACCESO CON BOTÓN SECRETO DE ENGRANAJE (ADMIN)
   if (!isAuthenticated) {
     return (
       <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', gap: '20px' }}>
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
-            <Lock size={32} />
-          </div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h2>
-          <p style={{ margin: 0, fontSize: '13px', color: '#555', padding: '0 10px', lineHeight: '1.4' }}>
-            Ingresa tu número celular autorizado. Este número quedará amarrado a tu sesión activa.
-          </p>
-        </div>
+        
+        {/* VISTA DEL PANEL ADMIN SECRETO */}
+        {isAdminMode ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', color: '#5b9ea6' }}>⚙️ Panel Administradora</h2>
+              <button 
+                onClick={() => setIsAdminMode(false)}
+                style={{ backgroundColor: '#f9f0c3', border: '1px solid #ebd1a6', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Volver 🔒
+              </button>
+            </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6', marginBottom: '6px' }}>
-              Número de Celular Autorizado:
-            </label>
-            <input
-              type="text"
-              placeholder="Ej: 593912345678"
-              value={inputPhoneCheck}
-              onChange={(e) => setInputPhoneCheck(e.target.value)}
-              style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loadingLogin}
-            style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-          >
-            <ShieldCheck size={18} />
-            <span>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</span>
-          </button>
-        </form>
+            {/* Formulario para agregar licencia */}
+            <form onSubmit={handleAddUser} style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>Autorizar Nuevo Número:</span>
+              <input 
+                type="text" 
+                placeholder="Ej: 593912345678" 
+                value={newAdminPhone}
+                onChange={(e) => setNewAdminPhone(e.target.value)}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
+                required
+              />
+              <input 
+                type="date" 
+                value={newAdminExpiry}
+                onChange={(e) => setNewAdminExpiry(e.target.value)}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
+                required
+              />
+              <button 
+                type="submit"
+                style={{ backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <UserPlus size={14} />
+                <span>Guardar Licencia</span>
+              </button>
+            </form>
 
-        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '12px', textAlign: 'center', fontSize: '12px', color: '#555', borderRadius: '10px', marginTop: '10px' }}>
-          <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
+            {/* Lista de usuarias autorizadas */}
+            <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', maxHeight: '250px', overflowY: 'auto' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '6px' }}>Usuarias Registradas:</span>
+              {loadingAdmin ? (
+                <p style={{ fontSize: '11px', textAlign: 'center' }}>Cargando...</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {adminUsersList.map((u) => (
+                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px', backgroundColor: '#faf8f5', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px' }}>
+                      <div>
+                        <strong>+{u.phone}</strong>
+                        <div style={{ fontSize: '9px', color: '#666' }}>Expira: {u.expiry_date || 'Sin límite'}</div>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteUser(u.id)}
+                        style={{ background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer' }}
+                        title="Eliminar licencia"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* VISTA NORMAL DE LOGIN */
+          <>
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
+                <Lock size={32} />
+              </div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h2>
+              <p style={{ margin: 0, fontSize: '13px', color: '#555', padding: '0 10px', lineHeight: '1.4' }}>
+                Ingresa tu número celular autorizado. Este número quedará amarrado a tu sesión activa.
+              </p>
+            </div>
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6', marginBottom: '6px' }}>
+                  Número de Celular Autorizado:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 593912345678"
+                  value={inputPhoneCheck}
+                  onChange={(e) => setInputPhoneCheck(e.target.value)}
+                  style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loadingLogin}
+                style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                <ShieldCheck size={18} />
+                <span>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</span>
+              </button>
+            </form>
+          </>
+        )}
+
+        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '12px', textAlign: 'center', fontSize: '12px', color: '#555', borderRadius: '10px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, flex: 1, textAlign: 'center' }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
+          
+          {/* ⚙️ BOTÓN DE ENGRANAJE DISCRETO PARA ACCEDER AL PANEL ADMIN */}
+          {!isAdminMode && (
+            <form onSubmit={handleAdminAccess} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input 
+                type="password" 
+                placeholder="Clave Admin" 
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                style={{ width: '70px', padding: '3px', fontSize: '9px', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+              <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: '2px' }} title="Panel Admin">
+                <Settings size={16} />
+              </button>
+            </form>
+          )}
         </footer>
 
         <a 
-          href="https://wa.me/593999999999?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
+          href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
           target="_blank" 
           rel="noopener noreferrer"
           style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
@@ -283,7 +459,7 @@ export default function App() {
             <span style={{ color: '#ccc' }}>→</span>
             <span style={{ color: currentStep === 2 ? '#5b9ea6' : '#999' }}>2. Mensaje</span>
             <span style={{ color: '#ccc' }}>→</span>
-            <span style={{ color: currentStep === 3 ? '#5b9ea6' : '#999' }}>3. Semáforo</span>
+            <span style={{ color: currentStep === 3 ? '#5b9ea6' : '#999' }}>3. Envío</span>
           </div>
         </div>
 
