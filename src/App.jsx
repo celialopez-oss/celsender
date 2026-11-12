@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe, Settings, UserPlus, Trash2, Calendar } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe, Settings, UserPlus, Trash2, Edit2, Search, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // 🔑 TUS CREDENCIALES DE SUPABASE
@@ -20,12 +20,19 @@ export default function App() {
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   
-  // Estados para el Panel de Administrador Secreto
+  // Estados para el Panel de Administrador y su Modal de Clave
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
+  
   const [adminUsersList, setAdminUsersList] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Formulario de Agregar / Editar Usuario
+  const [newName, setNewName] = useState('');
   const [newAdminPhone, setNewAdminPhone] = useState('');
   const [newAdminExpiry, setNewAdminExpiry] = useState('');
+  const [editingUserId, setEditingUserId] = useState(null);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(() => {
@@ -113,22 +120,24 @@ export default function App() {
     }
   };
 
-  // Función para abrir el panel admin con contraseña
-  const handleAdminAccess = (e) => {
+  // Validar contraseña secreta desde el modal flotante
+  const handleVerifyPassword = (e) => {
     e.preventDefault();
-    // 🔑 AQUÍ PUEDES CAMBIAR TU CONTRASEÑA DE ADMINISTRADORA
-    const MASTER_PASSWORD = 'celia1704'; 
+    // 🔑 CONTRASEÑA DE ADMINISTRADORA
+    const MASTER_PASSWORD = 'admin123';
 
-    if (adminPassword === MASTER_PASSWORD) {
+    if (adminPasswordInput === MASTER_PASSWORD) {
+      setShowPasswordModal(false);
+      setAdminPasswordInput('');
       setIsAdminMode(true);
       fetchAdminUsers();
     } else {
-      alert('❌ Contraseña de administradora incorrecta.');
-      setAdminPassword('');
+      alert('❌ Contraseña incorrecta.');
+      setAdminPasswordInput('');
     }
   };
 
-  // Cargar lista de usuarias desde Supabase para administrarlas
+  // Cargar lista de usuarios desde Supabase
   const fetchAdminUsers = async () => {
     setLoadingAdmin(true);
     try {
@@ -141,14 +150,14 @@ export default function App() {
       setAdminUsersList(data || []);
     } catch (err) {
       console.error(err);
-      alert('Error al cargar la lista de usuarias.');
+      alert('Error al cargar la lista de usuarios.');
     } finally {
       setLoadingAdmin(false);
     }
   };
 
-  // Agregar nueva usuaria autorizada desde el panel admin móvil
-  const handleAddUser = async (e) => {
+  // Guardar o Actualizar Usuario Registrado (con Nombre y Teléfono)
+  const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!newAdminPhone || !newAdminExpiry) {
       alert('Por favor completa el número y la fecha de expiración.');
@@ -156,27 +165,58 @@ export default function App() {
     }
 
     const cleanPhone = newAdminPhone.trim().replace(/^0/, '');
+    const userName = newName.trim() || 'Sin Nombre';
 
     try {
-      const { error } = await supabase
-        .from('authorized_users')
-        .insert([{ phone: cleanPhone, expiry_date: newAdminExpiry }]);
+      if (editingUserId) {
+        // Editar usuario existente
+        const { error } = await supabase
+          .from('authorized_users')
+          .update({ name: userName, phone: cleanPhone, expiry_date: newAdminExpiry })
+          .eq('id', editingUserId);
 
-      if (error) throw error;
+        if (error) throw error;
+        alert('✅ ¡Usuario actualizado exitosamente!');
+      } else {
+        // Crear nuevo usuario
+        const { error } = await supabase
+          .from('authorized_users')
+          .insert([{ name: userName, phone: cleanPhone, expiry_date: newAdminExpiry }]);
 
-      alert('✅ ¡Licencia agregada exitosamente!');
+        if (error) throw error;
+        alert('✅ ¡Usuario registrado exitosamente!');
+      }
+
+      setNewName('');
       setNewAdminPhone('');
       setNewAdminExpiry('');
+      setEditingUserId(null);
       fetchAdminUsers();
     } catch (err) {
       console.error(err);
-      alert('Error al agregar el usuario a Supabase.');
+      alert('Error al guardar el usuario en Supabase.');
     }
   };
 
-  // Eliminar o revocar licencia
+  // Preparar datos para editar usuario
+  const handleStartEdit = (user) => {
+    setEditingUserId(user.id);
+    setNewName(user.name || '');
+    setNewAdminPhone(user.phone || '');
+    setNewAdminExpiry(user.expiry_date || '');
+  };
+
+  // Cancelar edición
+  const handleCancelEdit = () => {
+    setEditingUserId(null);
+    setNewName('');
+    setNewAdminPhone('');
+    setNewAdminExpiry('');
+  };
+
+  // Eliminar usuario
   const handleDeleteUser = async (id) => {
-    if (!window.confirm('¿Deseas revocar y eliminar esta licencia?')) return;
+    if (!window.confirm('¿Deseas eliminar este usuario registrado?')) return;
 
     try {
       const { error } = await supabase
@@ -188,7 +228,7 @@ export default function App() {
       fetchAdminUsers();
     } catch (err) {
       console.error(err);
-      alert('Error al eliminar la licencia.');
+      alert('Error al eliminar el usuario.');
     }
   };
 
@@ -285,30 +325,60 @@ export default function App() {
     }
   };
 
-  // PANTALLA DE ACCESO CON BOTÓN SECRETO DE ENGRANAJE (ADMIN)
+  // Filtrar usuarios registrados por el buscador (nombre o teléfono)
+  const filteredAdminUsers = adminUsersList.filter(u => {
+    const query = searchQuery.toLowerCase();
+    const nameMatch = (u.name || '').toLowerCase().includes(query);
+    const phoneMatch = (u.phone || '').toLowerCase().includes(query);
+    return nameMatch || phoneMatch;
+  });
+
+  // PANTALLA DE ACCESO
   if (!isAuthenticated) {
     return (
-      <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', gap: '20px' }}>
+      <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', boxSizing: 'border-box', position: 'relative' }}>
         
-        {/* VISTA DEL PANEL ADMIN SECRETO */}
+        {/* ENCABEZADO CON ENGRANAJE ARRIBA */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px' }}>
+          <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
+          <button 
+            onClick={() => setShowPasswordModal(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b9ea6', padding: '4px' }}
+            title="Panel de Administrador"
+          >
+            <Settings size={22} />
+          </button>
+        </header>
+
+        {/* MODO PANEL DE ADMINISTRADOR */}
         {isAdminMode ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', color: '#5b9ea6' }}>⚙️ Panel Administradora</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f0c3', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ebd1a6' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6' }}>⚙️ Panel de Administrador</span>
               <button 
-                onClick={() => setIsAdminMode(false)}
-                style={{ backgroundColor: '#f9f0c3', border: '1px solid #ebd1a6', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                onClick={() => { setIsAdminMode(false); setEditingUserId(null); }}
+                style={{ backgroundColor: '#ffffff', border: '1px solid #ebd1a6', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', color: '#2c3e40' }}
               >
-                Volver 🔒
+                Cerrar Panel ✖
               </button>
             </div>
 
-            {/* Formulario para agregar licencia */}
-            <form onSubmit={handleAddUser} style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>Autorizar Nuevo Número:</span>
+            {/* Formulario de Agregar / Editar Usuario */}
+            <form onSubmit={handleSaveUser} style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>
+                {editingUserId ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario'}
+              </span>
               <input 
                 type="text" 
-                placeholder="Ej: 593912345678" 
+                placeholder="Nombre de la usuaria o usuario (Ej: María)" 
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
+                required
+              />
+              <input 
+                type="text" 
+                placeholder="Número de Celular (Ej: 593912345678)" 
                 value={newAdminPhone}
                 onChange={(e) => setNewAdminPhone(e.target.value)}
                 style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
@@ -321,35 +391,72 @@ export default function App() {
                 style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
                 required
               />
-              <button 
-                type="submit"
-                style={{ backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <UserPlus size={14} />
-                <span>Guardar Licencia</span>
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button 
+                  type="submit"
+                  style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  <UserPlus size={14} />
+                  <span>{editingUserId ? 'Actualizar' : 'Guardar Usuario'}</span>
+                </button>
+                {editingUserId && (
+                  <button 
+                    type="button"
+                    onClick={handleCancelEdit}
+                    style={{ backgroundColor: '#ddd', color: '#333', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </form>
 
-            {/* Lista de usuarias autorizadas */}
-            <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', maxHeight: '250px', overflowY: 'auto' }}>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '6px' }}>Usuarias Registradas:</span>
+            {/* Buscador de Usuarios */}
+            <div style={{ position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', top: '10px', left: '10px', color: '#888' }} />
+              <input 
+                type="text"
+                placeholder="Buscar usuario por nombre o número..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ width: '100%', padding: '8px 8px 8px 32px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '12px', boxSizing: 'border-box', outline: 'none' }}
+              />
+            </div>
+
+            {/* Lista de Usuarios Registrados */}
+            <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', flex: 1, maxHeight: '200px', overflowY: 'auto' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '6px' }}>
+                Usuarios Registrados ({filteredAdminUsers.length}):
+              </span>
               {loadingAdmin ? (
                 <p style={{ fontSize: '11px', textAlign: 'center' }}>Cargando...</p>
+              ) : filteredAdminUsers.length === 0 ? (
+                <p style={{ fontSize: '11px', color: '#666', textAlign: 'center' }}>No se encontraron usuarios.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {adminUsersList.map((u) => (
-                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px', backgroundColor: '#faf8f5', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px' }}>
+                  {filteredAdminUsers.map((u) => (
+                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: '#faf8f5', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px' }}>
                       <div>
-                        <strong>+{u.phone}</strong>
+                        <strong style={{ color: '#2c3e40', fontSize: '12px' }}>👤 {u.name || 'Sin Nombre'}</strong>
+                        <div style={{ color: '#5b9ea6' }}>+{u.phone}</div>
                         <div style={{ fontSize: '9px', color: '#666' }}>Expira: {u.expiry_date || 'Sin límite'}</div>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteUser(u.id)}
-                        style={{ background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer' }}
-                        title="Eliminar licencia"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          onClick={() => handleStartEdit(u)}
+                          style={{ background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer' }}
+                          title="Editar usuario"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUser(u.id)}
+                          style={{ background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer' }}
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -358,7 +465,7 @@ export default function App() {
           </div>
         ) : (
           /* VISTA NORMAL DE LOGIN */
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, gap: '20px' }}>
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
                 <Lock size={32} />
@@ -392,27 +499,42 @@ export default function App() {
                 <span>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</span>
               </button>
             </form>
-          </>
+          </div>
         )}
 
-        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '12px', textAlign: 'center', fontSize: '12px', color: '#555', borderRadius: '10px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ margin: 0, flex: 1, textAlign: 'center' }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
-          
-          {/* ⚙️ BOTÓN DE ENGRANAJE DISCRETO PARA ACCEDER AL PANEL ADMIN */}
-          {!isAdminMode && (
-            <form onSubmit={handleAdminAccess} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input 
-                type="password" 
-                placeholder="Clave Admin" 
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                style={{ width: '70px', padding: '3px', fontSize: '9px', borderRadius: '4px', border: '1px solid #ccc' }}
-              />
-              <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: '2px' }} title="Panel Admin">
-                <Settings size={16} />
-              </button>
-            </form>
-          )}
+        {/* MODAL FLOTANTE PARA PEDIR CONTRASEÑA DE ADMIN */}
+        {showPasswordModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', color: '#5b9ea6' }}>🔒 Clave de Administradora</h3>
+                <button onClick={() => setShowPasswordModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleVerifyPassword} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <input 
+                  type="password" 
+                  placeholder="Ingresa tu contraseña"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', fontSize: '14px', outline: 'none' }}
+                  required
+                  autoFocus
+                />
+                <button 
+                  type="submit"
+                  style={{ backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Ingresar al Panel
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '12px', textAlign: 'center', fontSize: '12px', color: '#555', borderRadius: '10px' }}>
+          <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
         </footer>
 
         <a 
