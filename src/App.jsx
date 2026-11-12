@@ -279,7 +279,7 @@ export default function App() {
         {/* Stepper */}
         <div style={{ marginBottom: '10px' }}>
           <div style={{ backgroundColor: '#ffffff', padding: '8px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', justifyContent: 'space-around', fontSize: '12px', fontWeight: 'bold' }}>
-            <span style={{ color: currentStep === 1 ? '#5b9ea6' : '#999' }}>1. Excel & País</span>
+            <span style={{ color: currentStep === 1 ? '#5b9ea6' : '#999' }}>1. Subir Archivo</span>
             <span style={{ color: '#ccc' }}>→</span>
             <span style={{ color: currentStep === 2 ? '#5b9ea6' : '#999' }}>2. Mensaje</span>
             <span style={{ color: '#ccc' }}>→</span>
@@ -295,7 +295,7 @@ export default function App() {
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FileSpreadsheet size={18} style={{ color: '#5b9ea6' }} />
-                <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Base de Datos y País</h2>
+                <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Base de Datos</h2>
               </div>
 
               {/* Selector de Código de País */}
@@ -325,7 +325,7 @@ export default function App() {
                 </p>
                 {/* EXPLORADOR GENERAL ABIERTO A CUALQUIER UBICACIÓN */}
                 <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '7px 12px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
-                  <span>Subir archivo Excel</span>
+                  <span>Sube tu Archivo</span>
                   <input 
                     type="file" 
                     accept="*/*" 
