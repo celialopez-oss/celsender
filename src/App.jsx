@@ -721,30 +721,43 @@ export default function App() {
                   const phoneKey = Object.keys(row).find(k => /cel|tel|phone|whatsapp|numero/i.test(k)) || Object.keys(row)[0];
                   const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
                   const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
-                  const clientName = row['Nombre'] || row['Client'] || row['client_name'] || `Contacto ${index + 1}`;
+                  
+                  // Recupera el nombre real del contacto desde el Excel usando tus columnas habituales
+                  const clientName = row['Nombre'] || row['Client'] || row['client_name'] || row[Object.keys(row).find(k => /nombre|client|cliente|name/i.test(k))] || `Contacto ${index + 1}`;
+                  
                   const isSent = sentStatuses[index];
                   const message = getProcessedMessage(row);
                   const whatsappUrl = `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`;
 
                   return (
                     <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: isSent ? '#f0fdf4' : '#ffffff', borderRadius: '6px', border: '1px solid', borderColor: isSent ? '#86efac' : '#ddd', fontSize: '11px' }}>
-                      <div style={{ overflow: 'hidden', marginRight: '8px' }}>
-                        <strong style={{ color: '#2c3e40', display: 'block' }}>{clientName}</strong>
-                        <span style={{ color: '#666', fontSize: '10px' }}>+{finalPhone}</span>
+                      <div style={{ overflow: 'hidden', marginRight: '8px', flex: 1 }}>
+                        <strong style={{ color: '#2c3e40', display: 'block', fontSize: '12px' }}>👤 {clientName}</strong>
+                        <span style={{ color: '#5b9ea6', fontSize: '10px', display: 'block' }}>+{finalPhone}</span>
+                        {/* Vista previa de las primeras líneas del mensaje */}
+                        <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          💬 "{message}"
+                        </p>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
                           onClick={() => {
+                            // 🔒 Validación de sesión y licencia activa
+                            if (!loggedPhone) {
+                              alert('⚠️ Sesión no válida o caducada. Por favor vuelve a ingresar con tu número autorizado.');
+                              setIsAuthenticated(false);
+                              return;
+                            }
+
+                            // Abre WhatsApp de forma segura y marca el progreso
+                            window.open(whatsappUrl, '_blank');
                             setSentStatuses(prev => ({ ...prev, [index]: true }));
                           }}
-                          style={{ backgroundColor: '#25D366', color: '#fff', padding: '6px 10px', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                          style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
                           <Send size={12} />
                           <span>{isSent ? 'Reenviar' : 'Enviar'}</span>
-                        </a>
+                        </button>
                         {isSent && <CheckCircle2 size={16} style={{ color: '#166534' }} />}
                       </div>
                     </div>
@@ -775,22 +788,3 @@ export default function App() {
               </div>
             </div>
           )}
-
-        </main>
-      </div>
-
-      <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px' }}>
-        <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
-      </footer>
-
-      <a 
-        href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
-      >
-        <MessageCircle size={28} />
-      </a>
-    </div>
-  );
-}
