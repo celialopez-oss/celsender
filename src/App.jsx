@@ -212,11 +212,13 @@ export default function App() {
     }
   };
 
-  // Preparar datos para editar usuario
+  // Preparar datos para editar usuario (Cortando la hora para el input type="date")
   const handleStartEdit = (user) => {
     setEditingUserId(user.id);
     setNewName(user.client_name || '');
     setNewAdminPhone(user.phone || '');
+    
+    // Extrae únicamente la parte "YYYY-MM-DD" para que el input tipo date no falle
     const dateOnly = user.expiry_date ? user.expiry_date.split('T')[0] : '';
     setNewAdminExpiry(dateOnly);
   };
