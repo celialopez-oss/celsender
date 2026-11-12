@@ -156,7 +156,7 @@ export default function App() {
     }
   };
 
- // Guardar o Actualizar Usuario Registrado
+  // Guardar o Actualizar Usuario Registrado (Blindada)
   const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!newAdminPhone || !newAdminExpiry) {
@@ -172,7 +172,6 @@ export default function App() {
 
     try {
       if (editingUserId) {
-        // Editar usuario existente usando client_name
         const { error } = await supabase
           .from('authorized_users')
           .update({ 
@@ -185,7 +184,6 @@ export default function App() {
         if (error) throw error;
         alert('✅ ¡Usuario actualizado exitosamente!');
       } else {
-        // Crear nuevo usuario usando client_name y is_active
         const { error } = await supabase
           .from('authorized_users')
           .insert([{ 
@@ -206,7 +204,11 @@ export default function App() {
       fetchAdminUsers();
     } catch (err) {
       console.error(err);
-      alert(`Error de Supabase: ${err.message}`);
+      if (err.code === '23505') {
+        alert('⚠️ Este número de teléfono ya está registrado. Usa el botón de editar si deseas actualizarlo.');
+      } else {
+        alert(`⚠️ Error de Supabase: ${err.message}`);
+      }
     }
   };
 
