@@ -13,14 +13,12 @@ export default function App() {
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   
-  // Recuperar paso actual de localStorage o iniciar en 1
   const [currentStep, setCurrentStep] = useState(() => {
     return Number(localStorage.getItem('celsender_step')) || 1;
   });
   
   const [countryCode, setCountryCode] = useState('593');
   
-  // Recuperar datos del Excel de localStorage si recarga la página
   const [excelData, setExcelData] = useState(() => {
     const saved = localStorage.getItem('celsender_excel');
     return saved ? JSON.parse(saved) : [];
@@ -30,18 +28,15 @@ export default function App() {
     return localStorage.getItem('celsender_filename') || '';
   });
 
-  // Recuperar plantilla de mensaje de localStorage
   const [messageTemplate, setMessageTemplate] = useState(() => {
     return localStorage.getItem('celsender_template') || '';
   });
 
-  // Estado para llevar el control de qué contactos ya fueron enviados (semáforo)
   const [sentStatuses, setSentStatuses] = useState(() => {
     const saved = localStorage.getItem('celsender_progress');
     return saved ? JSON.parse(saved) : {};
   });
 
-  // Guardar sesión y pasos automáticamente
   useEffect(() => {
     const savedAuth = localStorage.getItem('celsender_auth');
     if (savedAuth === 'true') {
@@ -225,12 +220,10 @@ export default function App() {
           </button>
         </form>
 
-        {/* Footer visible y adaptado */}
         <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '10px', color: '#666', borderRadius: '8px' }}>
           <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
         </footer>
 
-        {/* Botón Flotante de Soporte WhatsApp (Reemplaza con tu número real, ej: 5939XXXXXXXX) */}
         <a 
           href="https://wa.me/593999999999?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
           target="_blank" 
@@ -386,7 +379,7 @@ export default function App() {
           </div>
         )}
 
-        {/* PASO 3: CONTROL DE ENVÍOS SEMÁFORO */}
+        {/* PASO 3: CONTROL DE ENVÍOS SEMÁFORO (MUESTRA NOMBRE Y LAS PRIMERAS LÍNEAS DEL MENSAJE) */}
         {currentStep === 3 && (
           <div style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -407,29 +400,32 @@ export default function App() {
             {excelData.length === 0 ? (
               <p style={{ fontSize: '11px', color: '#666', textAlign: 'center', padding: '15px 0' }}>No hay contactos cargados. Vuelve al Paso 1.</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
                 {excelData.map((client) => {
                   const isSent = sentStatuses[client.id] === true;
+                  const clientMessage = getProcessedMessage(client);
                   return (
                     <div 
                       key={client.id} 
                       style={{ 
                         backgroundColor: isSent ? '#f0fdf4' : '#faf8f5', 
-                        padding: '7px 9px', 
+                        padding: '9px 12px', 
                         borderRadius: '8px', 
                         border: `1px solid ${isSent ? '#86efac' : '#93c4c8'}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '6px'
+                        gap: '8px'
                       }}
                     >
                       <div style={{ overflow: 'hidden', flex: 1 }}>
-                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#2c3e40', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {client.nombre} {isSent && '✅'}
+                        {/* Nombre del cliente */}
+                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#2c3e40', marginBottom: '2px' }}>
+                          👤 {client.nombre} {isSent && '✅'}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#666' }}>
-                          +{countryCode} {client.telefono} | Saldo: {client.deuda}
+                        {/* Vista previa personalizada del mensaje que se enviará */}
+                        <div style={{ fontSize: '9px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: 'italic' }}>
+                          "{clientMessage || 'Sin mensaje redactado'}"
                         </div>
                       </div>
 
@@ -439,7 +435,7 @@ export default function App() {
                           backgroundColor: isSent ? '#10b981' : '#5b9ea6',
                           color: '#ffffff',
                           border: 'none',
-                          padding: '5px 8px',
+                          padding: '6px 10px',
                           borderRadius: '6px',
                           fontSize: '10px',
                           fontWeight: 'bold',
@@ -474,7 +470,7 @@ export default function App() {
         <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
       </footer>
 
-      {/* Botón Flotante de WhatsApp para Dudas / Soporte */}
+      {/* Botón Flotante de WhatsApp */}
       <a 
         href="https://wa.me/593999999999?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
         target="_blank" 
