@@ -718,12 +718,16 @@ export default function App() {
               {/* Lista de Contactos para Enviar */}
               <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #ddd', padding: '8px', borderRadius: '8px', backgroundColor: '#faf8f5' }}>
                 {excelData.map((row, index) => {
-                  const phoneKey = Object.keys(row).find(k => /cel|tel|phone|whatsapp|numero/i.test(k)) || Object.keys(row)[0];
+                  const keys = Object.keys(row);
+                  
+                  // Búsqueda inteligente de teléfono (sin importar mayúsculas/minúsculas)
+                  const phoneKey = keys.find(k => /cel|tel|phone|whatsapp|numero|movil/i.test(k)) || keys[0];
                   const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
                   const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
                   
-                  // Recupera el nombre real del contacto desde el Excel usando tus columnas habituales
-                  const clientName = row['Nombre'] || row['Client'] || row['client_name'] || row[Object.keys(row).find(k => /nombre|client|cliente|name/i.test(k))] || `Contacto ${index + 1}`;
+                  // Búsqueda inteligente del nombre (agarra cualquier columna que tenga nombre, cliente, etc., o la primera columna de texto)
+                  const nameKey = keys.find(k => /nombre|client|cliente|name|persona/i.test(k)) || keys.find(k => typeof row[k] === 'string' && row[k].trim() !== '') || keys[0];
+                  const clientName = row[nameKey] ? String(row[nameKey]) : `Contacto ${index + 1}`;
                   
                   const isSent = sentStatuses[index];
                   const message = getProcessedMessage(row);
@@ -734,22 +738,29 @@ export default function App() {
                       <div style={{ overflow: 'hidden', marginRight: '8px', flex: 1 }}>
                         <strong style={{ color: '#2c3e40', display: 'block', fontSize: '12px' }}>👤 {clientName}</strong>
                         <span style={{ color: '#5b9ea6', fontSize: '10px', display: 'block' }}>+{finalPhone}</span>
-                        {/* Vista previa de las primeras líneas del mensaje */}
+                        {/* Vista previa limpia del mensaje */}
                         <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          💬 "{message}"
+                          💬 "{message || 'Escribe un mensaje en el Paso 2...'}"
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <button
                           onClick={() => {
-                            // 🔒 Validación de sesión y licencia activa
+                            // 🔒 Validación estricta de sesión
                             if (!loggedPhone) {
-                              alert('⚠️ Sesión no válida o caducada. Por favor vuelve a ingresar con tu número autorizado.');
+                              alert('⚠️ Sesión no válida. Por favor vuelve a ingresar con tu número autorizado.');
                               setIsAuthenticated(false);
                               return;
                             }
 
-                            // Abre WhatsApp de forma segura y marca el progreso
+                            // 🔒 CANDADO DE SEGURIDAD EXTREMO: 
+                            // Si quieres evitar estrictamente que se envíe a un número que no sea el de tu licencia o el que tú decidas, 
+                            // puedes descomentar la siguiente línea de validación:
+                            // if (finalPhone !== loggedPhone) {
+                            //   alert('❌ Acceso denegado: Solo puedes enviar mensajes desde el número de tu licencia activa.');
+                            //   return;
+                            // }
+
                             window.open(whatsappUrl, '_blank');
                             setSentStatuses(prev => ({ ...prev, [index]: true }));
                           }}
