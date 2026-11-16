@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, ExternalLink, MessageCircle, Globe, Settings, UserPlus, Trash2, Edit2, Search, X } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, MessageCircle, Globe, Settings, UserPlus, Trash2, Edit2, Search, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-// 🔑 TUS CREDENCIALES DE SUPABASE
+// 🔑 CREDENCIALES DE SUPABASE
 const SUPABASE_URL = "https://zbqgwwkhxjxfmzmltglm.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_G_Vvo4v1DFXFJy-ojrCLZA_rCbLPSeP";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -57,6 +57,10 @@ export default function App() {
     return localStorage.getItem('celsender_filename') || '';
   });
 
+  // Estados para filtros inteligentes de Estado y Nivel
+  const [selectedStatus, setSelectedStatus] = useState('TODOS');
+  const [selectedLevel, setSelectedLevel] = useState('TODOS');
+
   const [messageTemplate, setMessageTemplate] = useState(() => {
     return localStorage.getItem('celsender_template') || '';
   });
@@ -109,6 +113,8 @@ export default function App() {
           
           setSentStatuses({});
           localStorage.removeItem('celsender_progress');
+          setSelectedStatus('TODOS');
+          setSelectedLevel('TODOS');
           alert(`✅ ¡Archivo cargado con éxito! Se encontraron ${data.length} contactos.`);
         } else {
           alert('⚠️ El archivo Excel está vacío.');
@@ -130,7 +136,8 @@ export default function App() {
   const getProcessedMessage = (row) => {
     let msg = messageTemplate;
     Object.keys(row).forEach((key) => {
-      const regex = new RegExp(`{${key}}`, 'g');
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`{${escapedKey}}`, 'g');
       msg = msg.replace(regex, row[key] !== undefined ? row[key] : '');
     });
     return msg;
@@ -213,7 +220,7 @@ export default function App() {
     }
   };
 
-  // Guardar o Actualizar Usuario Registrado (Blindada)
+  // Guardar o Actualizar Usuario Registrado
   const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!newAdminPhone || !newAdminExpiry) {
@@ -269,7 +276,7 @@ export default function App() {
     }
   };
 
-  // Preparar datos para editar usuario (Cortando la hora para el input type="date")
+  // Preparar datos para editar usuario
   const handleStartEdit = (user) => {
     setEditingUserId(user.id);
     setNewName(user.client_name || '');
@@ -305,7 +312,7 @@ export default function App() {
     }
   };
 
-  // Filtrar usuarios registrados por el buscador (nombre o teléfono)
+  // Filtrar usuarios registrados por el buscador
   const filteredAdminUsers = adminUsersList.filter(u => {
     const query = searchQuery.toLowerCase();
     const nameMatch = (u.client_name || '').toLowerCase().includes(query);
@@ -526,11 +533,31 @@ export default function App() {
     );
   }
 
-  const totalContacts = excelData.length;
+  // 🔍 DETECCIÓN AUTOMÁTICA DE COLUMNAS DE ESTADO Y NIVEL
+  const statusColumnKey = excelColumns.find(col => /estado|estatus|status/i.test(col));
+  const levelColumnKey = excelColumns.find(col => /nivel|level|categoria|segmento/i.test(col));
+
+  // Extraer opciones únicas del Excel para los selectores
+  const uniqueStatuses = statusColumnKey 
+    ? ['TODOS', ...new Set(excelData.map(row => String(row[statusColumnKey] || '').trim()).filter(Boolean))]
+    : [];
+    
+  const uniqueLevels = levelColumnKey 
+    ? ['TODOS', ...new Set(excelData.map(row => String(row[levelColumnKey] || '').trim()).filter(Boolean))]
+    : [];
+
+  // Filtrar la base de datos según lo que elija la líder
+  const filteredExcelData = excelData.filter(row => {
+    const matchStatus = selectedStatus === 'TODOS' || !statusColumnKey || String(row[statusColumnKey] || '').trim() === selectedStatus;
+    const matchLevel = selectedLevel === 'TODOS' || !levelColumnKey || String(row[levelColumnKey] || '').trim() === selectedLevel;
+    return matchStatus && matchLevel;
+  });
+
+  const totalContacts = filteredExcelData.length;
   const sentCount = Object.keys(sentStatuses).length;
   const progressPercent = totalContacts > 0 ? Math.round((sentCount / totalContacts) * 100) : 0;
 
-  const sampleClient = excelData[0] || {};
+  const sampleClient = filteredExcelData[0] || {};
   const previewMessage = getProcessedMessage(sampleClient);
 
   return (
@@ -565,7 +592,7 @@ export default function App() {
         {/* Contenido Dinámico */}
         <main style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
           
-          {/* PASO 1: CARGAR EXCEL Y SELECCIONAR PAÍS */}
+          {/* PASO 1: CARGAR EXCEL, SELECCIONAR PAÍS Y FILTRAR */}
           {currentStep === 1 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -614,14 +641,66 @@ export default function App() {
                 </div>
               )}
 
+              {/* FILTROS INTELIGENTES POR ESTADO Y NIVEL */}
+              {(statusColumnKey || levelColumnKey) && (
+                <div style={{ backgroundColor: '#faf8f5', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
+                    🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
+                  </span>
+                  
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {statusColumnKey && (
+                      <div style={{ flex: 1, minWidth: '120px' }}>
+                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#555', marginBottom: '3px' }}>
+                          Filtrar por {statusColumnKey}:
+                        </label>
+                        <select
+                          value={selectedStatus}
+                          onChange={(e) => {
+                            setSelectedStatus(e.target.value);
+                            setSentStatuses({});
+                          }}
+                          style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none' }}
+                        >
+                          {uniqueStatuses.map(st => (
+                            <option key={st} value={st}>{st === 'TODOS' ? '📋 Todos' : st}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {levelColumnKey && (
+                      <div style={{ flex: 1, minWidth: '120px' }}>
+                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#555', marginBottom: '3px' }}>
+                          Filtrar por {levelColumnKey}:
+                        </label>
+                        <select
+                          value={selectedLevel}
+                          onChange={(e) => {
+                            setSelectedLevel(e.target.value);
+                            setSentStatuses({});
+                          }}
+                          style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none' }}
+                        >
+                          {uniqueLevels.map(lvl => (
+                            <option key={lvl} value={lvl}>{lvl === 'TODOS' ? '⭐ Todos' : lvl}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
+                  if (filteredExcelData.length === 0) { alert('No hay contactos que coincidan con ese filtro. Ajusta las opciones arriba.'); return; }
                   setCurrentStep(2);
                 }}
                 style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                <span>Continuar a Redactar</span>
+                <span>Continuar a Redactar ({filteredExcelData.length})</span>
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -667,7 +746,7 @@ export default function App() {
 
               <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #86efac' }}>
                 <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '3px' }}>
-                  👁️ Vista previa:
+                  👁️ Vista previa (Primer contacto seleccionado):
                 </span>
                 <p style={{ margin: 0, fontSize: '11px', color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.4' }}>
                   {previewMessage || <span style={{ color: '#888', fontStyle: 'italic' }}>Escribe algo arriba...</span>}
@@ -684,20 +763,20 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    if (excelData.length === 0) { alert('Sube un Excel primero.'); setCurrentStep(1); return; }
+                    if (filteredExcelData.length === 0) { alert('No hay contactos seleccionados.'); setCurrentStep(1); return; }
                     if (!messageTemplate.trim()) { alert('Por favor escribe un mensaje antes de continuar.'); return; }
                     setCurrentStep(3);
                   }}
                   style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  <span>Ir a Envíos</span>
+                  <span>Ir a Envíos ({filteredExcelData.length})</span>
                   <ArrowRight size={14} />
                 </button>
               </div>
             </div>
           )}
 
-{/* PASO 3: ENVÍO DE MENSAJES */}
+          {/* PASO 3: ENVÍO DE MENSAJES */}
           {currentStep === 3 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -715,9 +794,9 @@ export default function App() {
                 <div style={{ width: `${progressPercent}%`, backgroundColor: '#5b9ea6', height: '100%', transition: 'width 0.3s ease' }} />
               </div>
 
-              {/* Lista de Contactos para Enviar */}
+              {/* Lista de Contactos Filtrados para Enviar */}
               <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #ddd', padding: '8px', borderRadius: '8px', backgroundColor: '#faf8f5' }}>
-                {excelData.map((row, index) => {
+                {filteredExcelData.map((row, index) => {
                   const keys = Object.keys(row);
                   
                   // Búsqueda segura de teléfono
@@ -729,11 +808,11 @@ export default function App() {
                   const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
                   const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
                   
-                  // Búsqueda segura de nombre (busca columnas que contengan 'nom', 'cli' o 'name')
+                  // Búsqueda segura del nombre real desde el Excel
                   const nameKey = keys.find(k => {
                     const lower = k.toLowerCase();
-                    return lower.includes('nom') || lower.includes('cli') || lower.includes('name') || lower.includes('persona');
-                  }) || keys[1] || keys[0];
+                    return lower.includes('nom') || lower.includes('cli') || lower.includes('name') || lower.includes('persona') || lower.includes('razon');
+                  }) || keys.find(k => k !== phoneKey && String(row[k]).trim() !== '') || keys[0];
                   
                   const clientName = row[nameKey] ? String(row[nameKey]) : `Contacto ${index + 1}`;
                   
@@ -754,7 +833,7 @@ export default function App() {
                         <button
                           onClick={() => {
                             if (!loggedPhone) {
-                              alert('⚠️ Sesión no válida. Vuelve a ingresar.');
+                              alert('⚠️ Sesión no válida. Por favor vuelve a ingresar con tu número autorizado.');
                               setIsAuthenticated(false);
                               return;
                             }
@@ -796,3 +875,22 @@ export default function App() {
               </div>
             </div>
           )}
+
+        </main>
+      </div>
+
+      <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px' }}>
+        <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
+      </footer>
+
+      <a 
+        href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
+      >
+        <MessageCircle size={28} />
+      </a>
+    </div>
+  );
+}
