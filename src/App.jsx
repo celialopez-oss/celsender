@@ -697,7 +697,7 @@ export default function App() {
             </div>
           )}
 
-          {/* PASO 3: ENVÍO DE MENSAJES */}
+{/* PASO 3: ENVÍO DE MENSAJES */}
           {currentStep === 3 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -720,13 +720,21 @@ export default function App() {
                 {excelData.map((row, index) => {
                   const keys = Object.keys(row);
                   
-                  // Búsqueda inteligente de teléfono (sin importar mayúsculas/minúsculas)
-                  const phoneKey = keys.find(k => /cel|tel|phone|whatsapp|numero|movil/i.test(k)) || keys[0];
+                  // Búsqueda segura de teléfono
+                  const phoneKey = keys.find(k => {
+                    const lower = k.toLowerCase();
+                    return lower.includes('cel') || lower.includes('tel') || lower.includes('phone') || lower.includes('numero') || lower.includes('whatsapp');
+                  }) || keys[0];
+                  
                   const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
                   const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
                   
-                  // Búsqueda inteligente del nombre (agarra cualquier columna que tenga nombre, cliente, etc., o la primera columna de texto)
-                  const nameKey = keys.find(k => /nombre|client|cliente|name|persona/i.test(k)) || keys.find(k => typeof row[k] === 'string' && row[k].trim() !== '') || keys[0];
+                  // Búsqueda segura de nombre (busca columnas que contengan 'nom', 'cli' o 'name')
+                  const nameKey = keys.find(k => {
+                    const lower = k.toLowerCase();
+                    return lower.includes('nom') || lower.includes('cli') || lower.includes('name') || lower.includes('persona');
+                  }) || keys[1] || keys[0];
+                  
                   const clientName = row[nameKey] ? String(row[nameKey]) : `Contacto ${index + 1}`;
                   
                   const isSent = sentStatuses[index];
@@ -738,29 +746,18 @@ export default function App() {
                       <div style={{ overflow: 'hidden', marginRight: '8px', flex: 1 }}>
                         <strong style={{ color: '#2c3e40', display: 'block', fontSize: '12px' }}>👤 {clientName}</strong>
                         <span style={{ color: '#5b9ea6', fontSize: '10px', display: 'block' }}>+{finalPhone}</span>
-                        {/* Vista previa limpia del mensaje */}
                         <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          💬 "{message || 'Escribe un mensaje en el Paso 2...'}"
+                          💬 "{message || 'Escribe un mensaje...'}"
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <button
                           onClick={() => {
-                            // 🔒 Validación estricta de sesión
                             if (!loggedPhone) {
-                              alert('⚠️ Sesión no válida. Por favor vuelve a ingresar con tu número autorizado.');
+                              alert('⚠️ Sesión no válida. Vuelve a ingresar.');
                               setIsAuthenticated(false);
                               return;
                             }
-
-                            // 🔒 CANDADO DE SEGURIDAD EXTREMO: 
-                            // Si quieres evitar estrictamente que se envíe a un número que no sea el de tu licencia o el que tú decidas, 
-                            // puedes descomentar la siguiente línea de validación:
-                            // if (finalPhone !== loggedPhone) {
-                            //   alert('❌ Acceso denegado: Solo puedes enviar mensajes desde el número de tu licencia activa.');
-                            //   return;
-                            // }
-
                             window.open(whatsappUrl, '_blank');
                             setSentStatuses(prev => ({ ...prev, [index]: true }));
                           }}
