@@ -16,7 +16,7 @@ export default function App() {
   const [loggedPhone, setLoggedPhone] = useState(() => {
     return localStorage.getItem('celsender_logged_phone') || '';
   });
-
+  const [selectedFilters, setSelectedFilters] = useState({});
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   
@@ -533,20 +533,10 @@ export default function App() {
     );
   }
 
-  // 🔍 DETECCIÓN AUTOMÁTICA DE COLUMNAS DE ESTADO Y NIVEL
-  const statusColumnKey = excelColumns.find(col => /estado|estatus|status/i.test(col));
-  const levelColumnKey = excelColumns.find(col => /nivel|level|categoria|segmento/i.test(col));
+ // 1. Asegúrate de tener este estado arriba en tu componente junto a los demás useState:
+const [selectedFilters, setSelectedFilters] = useState({});
 
-  // Extraer opciones únicas del Excel para los selectores
-  const uniqueStatuses = statusColumnKey 
-    ? ['TODOS', ...new Set(excelData.map(row => String(row[statusColumnKey] || '').trim()).filter(Boolean))]
-    : [];
-    
-  const uniqueLevels = levelColumnKey 
-    ? ['TODOS', ...new Set(excelData.map(row => String(row[levelColumnKey] || '').trim()).filter(Boolean))]
-    : [];
-
-  // Filtrar la base de datos según las selecciones dinámicas de cada columna
+// 2. Función de filtrado dinámico para todas las columnas:
 const filteredExcelData = excelData.filter(row => {
   if (!selectedFilters || Object.keys(selectedFilters).length === 0) return true;
   
@@ -557,220 +547,73 @@ const filteredExcelData = excelData.filter(row => {
   });
 });
 
-  const totalContacts = filteredExcelData.length;
-  const sentCount = Object.keys(sentStatuses).length;
-  const progressPercent = totalContacts > 0 ? Math.round((sentCount / totalContacts) * 100) : 0;
-
-  const sampleClient = filteredExcelData[0] || {};
-  const previewMessage = getProcessedMessage(sampleClient);
-
-  return (
-    <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', position: 'relative', padding: '12px' }}>
-      
-      <div>
-        {/* Header */}
-        <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #93c4c8', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px', marginBottom: '10px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
-            <p style={{ margin: 0, fontSize: '10px', color: '#666' }}>Licencia: +{loggedPhone} 🟢</p>
-          </div>
-          <button
-            onClick={() => { setIsAuthenticated(false); localStorage.clear(); }}
-            style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}
-          >
-            Cerrar 🔒
-          </button>
-        </header>
-
-        {/* Stepper */}
-        <div style={{ marginBottom: '10px' }}>
-          <div style={{ backgroundColor: '#ffffff', padding: '8px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', justifyContent: 'space-around', fontSize: '12px', fontWeight: 'bold' }}>
-            <span style={{ color: currentStep === 1 ? '#5b9ea6' : '#999' }}>1. Subir Archivo</span>
-            <span style={{ color: '#ccc' }}>→</span>
-            <span style={{ color: currentStep === 2 ? '#5b9ea6' : '#999' }}>2. Mensaje</span>
-            <span style={{ color: '#ccc' }}>→</span>
-            <span style={{ color: currentStep === 3 ? '#5b9ea6' : '#999' }}>3. Envío</span>
-          </div>
-        </div>
-
-        {/* Contenido Dinámico */}
-        <main style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
-          
-          {/* PASO 1: CARGAR EXCEL, SELECCIONAR PAÍS Y FILTRAR */}
-          {currentStep === 1 && (
-            <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FileSpreadsheet size={18} style={{ color: '#5b9ea6' }} />
-                <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Base de Datos</h2>
-              </div>
-
-              <div style={{ backgroundColor: '#faf8f5', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>
-                  <Globe size={16} />
-                  <span>Código de País:</span>
-                </div>
-                <select
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '12px', fontWeight: 'bold', color: '#2c3e40', outline: 'none' }}
-                >
-                  <option value="593">🇪🇨 Ecuador (+593)</option>
-                  <option value="57">🇨🇴 Colombia (+57)</option>
-                  <option value="51">🇵🇪 Perú (+51)</option>
-                  <option value="34">🇪🇸 España (+34)</option>
-                  <option value="52">🇲🇽 México (+52)</option>
-                  <option value="1">🇺🇸 Estados Unidos (+1)</option>
-                </select>
-              </div>
-
-              <div style={{ border: '2px dashed #93c4c8', borderRadius: '8px', padding: '16px', textAlign: 'center', backgroundColor: '#faf8f5' }}>
-                <Upload size={24} style={{ color: '#5b9ea6', margin: '0 auto 6px auto', display: 'block' }} />
-                <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: '#444', fontWeight: '500' }}>
-                  {fileName ? `Excel: ${fileName}` : `Cargados: ${excelData.length} contactos`}
-                </p>
-                <label style={{ display: 'inline-block', backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '11px', fontWeight: 'bold', padding: '7px 12px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #ebd1a6' }}>
-                  <span>Sube tu Archivo</span>
-                  <input 
-                    type="file" 
-                    accept="*/*" 
-                    onChange={handleExcelUpload} 
-                    style={{ display: 'none' }} 
-                  />
-                </label>
-              </div>
-
-              {excelColumns.length > 0 && (
-                <div style={{ fontSize: '10px', color: '#166534', backgroundColor: '#f0fdf4', padding: '6px', borderRadius: '6px', border: '1px solid #86efac' }}>
-                  ✅ Columnas detectadas: {excelColumns.join(', ')}
-                </div>
-              )}
-
-{/* FILTROS DINÁMICOS PARA TODAS LAS COLUMNAS DEL EXCEL */}
-{excelColumns.length > 0 && (
-  <div style={{ backgroundColor: '#faf8f5', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
-        🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
-      </span>
-      {/* Botón opcional para limpiar filtros si deseas agregarlo luego */}
-    </div>
-    
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-      {excelColumns.map((col) => {
-        // Obtenemos todos los valores únicos para esta columna específica del Excel
-        const uniqueValues = ['TODOS', ...new Set(excelData.map(row => row[col]).filter(val => val !== undefined && val !== null && val !== ''))];
-        
-        // Si la columna tiene muy pocos valores o demasiados textos largos únicos (como nombres o teléfonos), puedes omitirla si prefieres, 
-        // pero aquí se muestran todas para que tengan control total independiente. O si prefieres filtrar solo las relevantes, dime.
-        
-        return (
-          <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Filtrar por {col}:
-            </label>
-            <select
-              value={selectedFilters?.[col] || 'TODOS'}
-              onChange={(e) => {
-                const val = e.target.value;
-                // Actualiza tu estado de filtros dinámicos (asegúrate de tener un estado como selectedFilters, ej: { [col]: val })
-                setSelectedFilters(prev => ({
-                  ...(prev || {}),
-                  [col]: val
-                }));
-                setSentStatuses({});
-              }}
-              style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none', boxSizing: 'border-box' }}
-            >
-              {uniqueValues.map(val => (
-                <option key={val} value={val}>{val === 'TODOS' ? `📋 Todos (${col})` : val}</option>
-              ))}
-            </select>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
-
-<button
-  onClick={() => {
-    if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
-    if (filteredExcelData.length === 0) { alert('No hay contactos que coincidan con esos filtros. Ajusta las opciones arriba.'); return; }
-    setCurrentStep(2);
-  }}
-  style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
->
-  <span>Continuar a Redactar ({filteredExcelData.length})</span>
-  <ArrowRight size={14} />
-</button>
-
-{/* PASO 2: REDACTAR MENSAJE CON COLUMNAS DINÁMICAS */}
-{currentStep === 2 && (
-  <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+// --- EN TU VISTA (JSX), DENTRO DEL PASO 1 ---
+{currentStep === 1 && (
+  <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <MessageSquare size={18} style={{ color: '#5b9ea6' }} />
-      <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Plantilla con tus Columnas</h2>
+      <FileSpreadsheet size={18} style={{ color: '#5b9ea6' }} />
+      <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Cargar Excel de Contactos</h2>
     </div>
 
+    {/* Input para subir el archivo */}
     <div>
-      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '4px' }}>Toca para insertar tus columnas del Excel:</span>
-      {excelColumns.length === 0 ? (
-        <p style={{ fontSize: '11px', color: '#e06d6d' }}>Sube un Excel en el Paso 1 para ver tus columnas.</p>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '80px', overflowY: 'auto' }}>
-          {excelColumns.map((col) => (
-            <button
-              key={col}
-              onClick={() => insertVariable(col)}
-              style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', border: '1px solid #ebd1a6', cursor: 'pointer' }}
-            >
-              +{col}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-
-    <div>
-      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '4px' }}>Redacta tu mensaje:</span>
-      <textarea
-        rows="4"
-        placeholder="Ej: Hola {Nombre}, tienes una deuda de {Deuda} y {Puntos} acumulados..."
-        value={messageTemplate}
-        onChange={(e) => setMessageTemplate(e.target.value)}
-        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#faf8f5', fontSize: '12px', outline: 'none', color: '#2c3e40', boxSizing: 'border-box' }}
+      <input 
+        type="file" 
+        accept=".xlsx, .xls, .csv" 
+        onChange={handleFileUpload} 
+        style={{ fontSize: '11px', color: '#2c3e40' }} 
       />
     </div>
 
-    <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #86efac' }}>
-      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '3px' }}>
-        👁️ Vista previa (Primer contacto seleccionado):
-      </span>
-      <p style={{ margin: 0, fontSize: '11px', color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.4' }}>
-        {previewMessage || <span style={{ color: '#888', fontStyle: 'italic' }}>Escribe algo arriba...</span>}
-      </p>
-    </div>
+    {/* FILTROS DINÁMICOS PARA TODAS LAS COLUMNAS DEL EXCEL */}
+    {excelColumns.length > 0 && (
+      <div style={{ backgroundColor: '#faf8f5', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
+          🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
+        </span>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+          {excelColumns.map((col) => {
+            const uniqueValues = ['TODOS', ...new Set(excelData.map(row => row[col]).filter(val => val !== undefined && val !== null && val !== ''))];
+            
+            return (
+              <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Filtrar por {col}:
+                </label>
+                <select
+                  value={selectedFilters?.[col] || 'TODOS'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedFilters(prev => ({
+                      ...(prev || {}),
+                      [col]: val
+                    }));
+                  }}
+                  style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none', boxSizing: 'border-box' }}
+                >
+                  {uniqueValues.map(val => (
+                    <option key={val} value={val}>{val === 'TODOS' ? `📋 Todos (${col})` : val}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
 
-    <div style={{ display: 'flex', gap: '8px' }}>
-      <button
-        onClick={() => setCurrentStep(1)}
-        style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-      >
-        <ArrowLeft size={14} />
-        <span>Atrás</span>
-      </button>
-      <button
-        onClick={() => {
-          if (filteredExcelData.length === 0) { alert('No hay contactos seleccionados.'); setCurrentStep(1); return; }
-          if (!messageTemplate.trim()) { alert('Por favor escribe un mensaje antes de continuar.'); return; }
-          setCurrentStep(3);
-        }}
-        style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex5', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-      >
-        <span>Ir a Envíos ({filteredExcelData.length})</span>
-        <ArrowRight size={14} />
-      </button>
-    </div>
+    <button
+      onClick={() => {
+        if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
+        if (filteredExcelData.length === 0) { alert('No hay contactos que coincidan con esos filtros. Ajusta las opciones arriba.'); return; }
+        setCurrentStep(2);
+      }}
+      style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
+    >
+      <span>Continuar a Redactar ({filteredExcelData.length})</span>
+      <ArrowRight size={14} />
+    </button>
   </div>
 )}
 
