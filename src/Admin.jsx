@@ -14,7 +14,7 @@ export default function AdminPanel() {
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   
-  // Fecha por defecto: hoy + 1 mes exacto (puedes cambiarla libremente en el calendario)
+  // Fecha por defecto: hoy + 1 mes exacto
   const getDefaultExpiry = () => {
     const d = new Date();
     d.setMonth(d.getMonth() + 1);
@@ -23,13 +23,40 @@ export default function AdminPanel() {
 
   const [expiryDateInput, setExpiryDateInput] = useState(getDefaultExpiry());
 
-  const MASTER_ADMIN_PASS = "celia2026"; 
-
   useEffect(() => {
     if (isLogged) {
       fetchUsers();
     }
   }, [isLogged]);
+
+  // Validación de contraseña segura mediante función RPC en Supabase
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!adminPassword) return;
+
+    try {
+      const { data: isValid, error } = await supabase.rpc('verificar_admin', {
+        clave_ingresada: adminPassword
+      });
+
+      if (error) {
+        console.error('Error al validar credenciales:', error);
+        alert('Error al conectar con el servidor de seguridad.');
+        return;
+      }
+
+      if (isValid === true) {
+        setIsLogged(true);
+        setAdminPassword('');
+      } else {
+        alert('Contraseña incorrecta');
+        setAdminPassword('');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Ocurrió un error inesperado.');
+    }
+  };
 
   const fetchUsers = async () => {
     const { data, error } = await supabase.from('authorized_users').select('*').order('created_at', { ascending: false });
@@ -45,7 +72,6 @@ export default function AdminPanel() {
     if (!clientPhone || !clientName || !expiryDateInput) return;
 
     const cleanPhone = clientPhone.trim().replace(/^0/, '');
-    // Convertir la fecha seleccionada a formato ISO para Supabase
     const finalExpiryDate = new Date(expiryDateInput + 'T23:59:59').toISOString();
 
     const { error } = await supabase.from('authorized_users').insert([
@@ -86,7 +112,7 @@ export default function AdminPanel() {
             <h2 style={{ color: '#5b9ea6', margin: 0, fontSize: '18px' }}>👑 CelSender Admin</h2>
             <p style={{ fontSize: '12px', color: '#666' }}>Panel de Control de Licencias</p>
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); if(adminPassword === MASTER_ADMIN_PASS) setIsLogged(true); else alert('Contraseña incorrecta'); }} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <input
               type="password"
               placeholder="Contraseña de Administradora"
