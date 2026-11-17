@@ -16,7 +16,7 @@ export default function App() {
   const [loggedPhone, setLoggedPhone] = useState(() => {
     return localStorage.getItem('celsender_logged_phone') || '';
   });
-  const [selectedFilters, setSelectedFilters] = useState({});
+
   const [inputPhoneCheck, setInputPhoneCheck] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   
@@ -57,9 +57,8 @@ export default function App() {
     return localStorage.getItem('celsender_filename') || '';
   });
 
-  // Estados para filtros inteligentes de Estado y Nivel
-  const [selectedStatus, setSelectedStatus] = useState('TODOS');
-  const [selectedLevel, setSelectedLevel] = useState('TODOS');
+  // Estado para filtros dinámicos universales
+  const [selectedFilters, setSelectedFilters] = useState({});
 
   const [messageTemplate, setMessageTemplate] = useState(() => {
     return localStorage.getItem('celsender_template') || '';
@@ -85,6 +84,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('celsender_progress', JSON.stringify(sentStatuses));
   }, [sentStatuses]);
+
+  // Función de filtrado dinámico para todas las columnas
+  const filteredExcelData = excelData.filter(row => {
+    if (!selectedFilters || Object.keys(selectedFilters).length === 0) return true;
+    
+    return Object.keys(selectedFilters).every(col => {
+      const filterVal = selectedFilters[col];
+      if (!filterVal || filterVal === 'TODOS') return true;
+      return String(row[col] || '').trim() === String(filterVal).trim();
+    });
+  });
 
   // Manejador para subir el archivo Excel
   const handleExcelUpload = (e) => {
@@ -113,8 +123,7 @@ export default function App() {
           
           setSentStatuses({});
           localStorage.removeItem('celsender_progress');
-          setSelectedStatus('TODOS');
-          setSelectedLevel('TODOS');
+          setSelectedFilters({});
           alert(`✅ ¡Archivo cargado con éxito! Se encontraron ${data.length} contactos.`);
         } else {
           alert('⚠️ El archivo Excel está vacío.');
@@ -517,107 +526,127 @@ export default function App() {
           </div>
         )}
 
-        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '12px', textAlign: 'center', fontSize: '12px', color: '#555', borderRadius: '10px' }}>
-          <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
-        </footer>
-
-        <a 
-          href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
-        >
-          <MessageCircle size={28} />
-        </a>
       </div>
     );
   }
 
- // 1. Asegúrate de tener este estado arriba en tu componente junto a los demás useState:
-const [selectedFilters, setSelectedFilters] = useState({});
+  // PANTALLA PRINCIPAL DE LA APLICACIÓN
+  const totalContacts = filteredExcelData.length;
+  const sentCount = Object.values(sentStatuses).filter(Boolean).length;
+  const progressPercent = totalContacts > 0 ? Math.round((sentCount / totalContacts) * 100) : 0;
+  const previewMessage = excelData.length > 0 ? getProcessedMessage(excelData[0]) : '';
 
-// 2. Función de filtrado dinámico para todas las columnas:
-const filteredExcelData = excelData.filter(row => {
-  if (!selectedFilters || Object.keys(selectedFilters).length === 0) return true;
-  
-  return Object.keys(selectedFilters).every(col => {
-    const filterVal = selectedFilters[col];
-    if (!filterVal || filterVal === 'TODOS') return true;
-    return String(row[col] || '').trim() === String(filterVal).trim();
-  });
-});
-
-// --- EN TU VISTA (JSX), DENTRO DEL PASO 1 ---
-{currentStep === 1 && (
-  <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <FileSpreadsheet size={18} style={{ color: '#5b9ea6' }} />
-      <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Cargar Excel de Contactos</h2>
-    </div>
-
-    {/* Input para subir el archivo */}
-    <div>
-      <input 
-        type="file" 
-        accept=".xlsx, .xls, .csv" 
-        onChange={handleFileUpload} 
-        style={{ fontSize: '11px', color: '#2c3e40' }} 
-      />
-    </div>
-
-    {/* FILTROS DINÁMICOS PARA TODAS LAS COLUMNAS DEL EXCEL */}
-    {excelColumns.length > 0 && (
-      <div style={{ backgroundColor: '#faf8f5', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
-          🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
-        </span>
+  return (
+    <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', boxSizing: 'border-box' }}>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-          {excelColumns.map((col) => {
-            const uniqueValues = ['TODOS', ...new Set(excelData.map(row => row[col]).filter(val => val !== undefined && val !== null && val !== ''))];
-            
-            return (
-              <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  Filtrar por {col}:
-                </label>
-                <select
-                  value={selectedFilters?.[col] || 'TODOS'}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedFilters(prev => ({
-                      ...(prev || {}),
-                      [col]: val
-                    }));
-                  }}
-                  style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none', boxSizing: 'border-box' }}
-                >
-                  {uniqueValues.map(val => (
-                    <option key={val} value={val}>{val === 'TODOS' ? `📋 Todos (${col})` : val}</option>
-                  ))}
-                </select>
-              </div>
-            );
-          })}
+        {/* Cabecera superior con estado de licencia y botón cerrar sesión */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: '10px 14px', borderRadius: '10px', border: '1px solid #93c4c8' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
+            <span style={{ fontSize: '10px', color: '#666' }}>Licencia: +{loggedPhone} <span style={{ color: '#166534', fontWeight: 'bold' }}>●</span></span>
+          </div>
+          <button
+            onClick={() => {
+              if (window.confirm('¿Deseas cerrar sesión?')) {
+                setIsAuthenticated(false);
+                setLoggedPhone('');
+                localStorage.removeItem('celsender_auth');
+                localStorage.removeItem('celsender_logged_phone');
+              }
+            }}
+            style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Cerrar 🔒
+          </button>
+        </header>
+
+        {/* Pasos principales */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6', padding: '0 4px' }}>
+          <span style={{ opacity: currentStep === 1 ? 1 : 0.5 }}>1. Subir Archivo</span>
+          <span>→</span>
+          <span style={{ opacity: currentStep === 2 ? 1 : 0.5 }}>2. Mensaje</span>
+          <span>→</span>
+          <span style={{ opacity: currentStep === 3 ? 1 : 0.5 }}>3. Envíos</span>
         </div>
-      </div>
-    )}
 
-    <button
-      onClick={() => {
-        if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
-        if (filteredExcelData.length === 0) { alert('No hay contactos que coincidan con esos filtros. Ajusta las opciones arriba.'); return; }
-        setCurrentStep(2);
-      }}
-      style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
-    >
-      <span>Continuar a Redactar ({filteredExcelData.length})</span>
-      <ArrowRight size={14} />
-    </button>
-  </div>
-)}
+        <main style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          
+          {/* PASO 1: CARGAR EXCEL Y FILTROS DINÁMICOS */}
+          {currentStep === 1 && (
+            <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileSpreadsheet size={18} style={{ color: '#5b9ea6' }} />
+                <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Cargar Excel de Contactos</h2>
+              </div>
 
-          {/* PASO 2: REDACTAR MENSAJE CON COLUMNAS DINÁMICAS */}
+              <div>
+                <input 
+                  type="file" 
+                  accept=".xlsx, .xls, .csv" 
+                  onChange={handleExcelUpload} 
+                  style={{ fontSize: '11px', color: '#2c3e40' }} 
+                />
+              </div>
+
+              {excelColumns.length > 0 && (
+                <div style={{ backgroundColor: '#faf8f5', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
+                    🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
+                  </span>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                    {excelColumns.map((col) => {
+                      const uniqueValues = ['TODOS', ...new Set(excelData.map(row => row[col]).filter(val => val !== undefined && val !== null && val !== ''))];
+                      
+                      return (
+                        <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            Filtrar por {col}:
+                          </label>
+                          <select
+                            value={selectedFilters?.[col] || 'TODOS'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedFilters(prev => {
+                                const updated = { ...(prev || {}) };
+                                if (val === 'TODOS') {
+                                  delete updated[col];
+                                } else {
+                                  updated[col] = val;
+                                }
+                                return updated;
+                              });
+                            }}
+                            style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '11px', color: '#2c3e40', outline: 'none', boxSizing: 'border-box' }}
+                          >
+                            {uniqueValues.map(val => (
+                              <option key={val} value={val}>{val === 'TODOS' ? `📋 Todos (${col})` : val}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (excelData.length === 0) { alert('Sube un archivo Excel primero.'); return; }
+                  if (filteredExcelData.length === 0) { alert('No hay contactos que coincidan con esos filtros. Ajusta las opciones arriba.'); return; }
+                  setCurrentStep(2);
+                }}
+                style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
+              >
+                <span>Continuar a Redactar ({filteredExcelData.length})</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* PASO 2: REDACTAR MENSAJE */}
           {currentStep === 2 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -687,7 +716,7 @@ const filteredExcelData = excelData.filter(row => {
             </div>
           )}
 
-          {/* PASO 3: ENVÍO DE MENSAJES */}
+          {/* PASO 3: CENTRO DE ENVÍOS */}
           {currentStep === 3 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -710,7 +739,6 @@ const filteredExcelData = excelData.filter(row => {
                 {filteredExcelData.map((row, index) => {
                   const keys = Object.keys(row);
                   
-                  // Búsqueda segura de teléfono
                   const phoneKey = keys.find(k => {
                     const lower = k.toLowerCase();
                     return lower.includes('cel') || lower.includes('tel') || lower.includes('phone') || lower.includes('numero') || lower.includes('whatsapp');
@@ -719,7 +747,6 @@ const filteredExcelData = excelData.filter(row => {
                   const rawPhone = row[phoneKey] ? String(row[phoneKey]).trim().replace(/\D/g, '') : '';
                   const finalPhone = rawPhone.startsWith(countryCode) ? rawPhone : `${countryCode}${rawPhone.replace(/^0/, '')}`;
                   
-                  // Búsqueda segura del nombre real desde el Excel
                   const nameKey = keys.find(k => {
                     const lower = k.toLowerCase();
                     return lower.includes('nom') || lower.includes('cli') || lower.includes('name') || lower.includes('persona') || lower.includes('razon');
@@ -788,20 +815,21 @@ const filteredExcelData = excelData.filter(row => {
           )}
 
         </main>
+
+        {/* Footer y botón flotante de WhatsApp */}
+        <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px', textAlign: 'center', borderRadius: '8px', marginTop: '10px' }}>
+          <p style={{ margin: 0, fontSize: '10px', color: '#666' }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
+        </footer>
+
+        <a
+          href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#ffffff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000 }}
+        >
+          <MessageCircle size={28} />
+        </a>
       </div>
-
-      <footer style={{ backgroundColor: '#ffffff', border: '1px solid #93c4c8', padding: '10px', textAlign: 'center', fontSize: '11px', color: '#555', borderRadius: '8px' }}>
-        <p style={{ margin: 0 }}>© 2026 CelSender • Desarrollado por <span style={{ color: '#5b9ea6', fontWeight: 'bold' }}>celiadigitalec</span></p>
-      </footer>
-
-      <a 
-        href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#fff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000, textDecoration: 'none' }}
-      >
-        <MessageCircle size={28} />
-      </a>
     </div>
   );
 }
