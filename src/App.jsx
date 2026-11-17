@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, MessageCircle, Settings, UserPlus, Trash2, Edit2, Search, X } from 'lucide-react';
+import { Upload, FileSpreadsheet, MessageSquare, Send, CheckCircle2, RotateCcw, ArrowRight, ArrowLeft, ShieldCheck, Lock, MessageCircle, Settings, UserPlus, Trash2, Edit2, Search, X, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // 🔑 CREDENCIALES DE SUPABASE
@@ -57,11 +57,14 @@ export default function App() {
     return localStorage.getItem('celsender_filename') || '';
   });
 
-  // 🎯 ESTADOS PARA LOS 4 FILTROS AVANZADOS (Múltiples selecciones)
+  // 🎯 ESTADOS PARA LOS 4 FILTROS AVANZADOS
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedLevels, setSelectedLevels] = useState([]);
   const [selectedDebts, setSelectedDebts] = useState([]);
-  const [birthdayFilter, setBirthdayFilter] = useState(''); // Filtro por fecha exacta o texto de cumpleaños
+  const [birthdayFilter, setBirthdayFilter] = useState('');
+
+  // Control para abrir/cerrar los menús desplegables de filtros
+  const [openDropdown, setOpenDropdown] = useState(null);
 
   const [messageTemplate, setMessageTemplate] = useState(() => {
     return localStorage.getItem('celsender_template') || '';
@@ -88,7 +91,7 @@ export default function App() {
     localStorage.setItem('celsender_progress', JSON.stringify(sentStatuses));
   }, [sentStatuses]);
 
-  // Búsqueda inteligente de las columnas clave en el Excel subido
+  // Búsqueda inteligente de columnas clave
   const findColumnKey = (keywords) => {
     if (!excelColumns.length) return null;
     return excelColumns.find(col => {
@@ -102,27 +105,23 @@ export default function App() {
   const debtKey = findColumnKey(['deuda', 'saldo', 'valor', 'monto', 'total']);
   const bdayKey = findColumnKey(['cumple', 'nacimiento', 'fecha', 'cumpleaños']);
 
-  // 🔄 LÓGICA DE FILTRADO MULTI-OPCIÓN PARA LOS 4 CAMPOS
+  // 🔄 LÓGICA DE FILTRADO MULTI-OPCIÓN
   const filteredExcelData = excelData.filter(row => {
-    // 1. Filtro de Estatus (Múltiple selección)
     if (statusKey && selectedStatuses.length > 0) {
       const val = String(row[statusKey] || '').trim();
       if (!selectedStatuses.includes(val)) return false;
     }
 
-    // 2. Filtro de Nivel (Múltiple selección)
     if (levelKey && selectedLevels.length > 0) {
       const val = String(row[levelKey] || '').trim();
       if (!selectedLevels.includes(val)) return false;
     }
 
-    // 3. Filtro de Deuda (Múltiple selección, ej. ceros o montos específicos)
     if (debtKey && selectedDebts.length > 0) {
       const val = String(row[debtKey] || '').trim();
       if (!selectedDebts.includes(val)) return false;
     }
 
-    // 4. Filtro de Cumpleaños (Por fecha o coincidencia)
     if (bdayKey && birthdayFilter.trim() !== '') {
       const val = String(row[bdayKey] || '').trim();
       if (!val.toLowerCase().includes(birthdayFilter.trim().toLowerCase())) return false;
@@ -131,7 +130,6 @@ export default function App() {
     return true;
   });
 
-  // Manejador para subir el archivo Excel
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -174,12 +172,10 @@ export default function App() {
     reader.readAsBinaryString(file);
   };
 
-  // Insertar variable de columna en la plantilla de mensaje
   const insertVariable = (col) => {
     setMessageTemplate((prev) => `${prev} {${col}}`);
   };
 
-  // Procesar mensaje con los datos del contacto
   const getProcessedMessage = (row) => {
     let msg = messageTemplate;
     Object.keys(row).forEach((key) => {
@@ -214,7 +210,7 @@ export default function App() {
         const expiry = new Date(data.expiry_date);
         const now = new Date();
         if (expiry < now) {
-          alert('❌ Tu licencia mensual ha caducado. Comunícate con la administración para renovarla.');
+          alert('❌ Tu licencia mensual ha caducado.');
           setLoadingLogin(false);
           return;
         }
@@ -234,9 +230,7 @@ export default function App() {
 
   const handleVerifyPassword = (e) => {
     e.preventDefault();
-    const MASTER_PASSWORD = 'admin123';
-
-    if (adminPasswordInput === MASTER_PASSWORD) {
+    if (adminPasswordInput === 'admin123') {
       setShowPasswordModal(false);
       setAdminPasswordInput('');
       setIsAdminMode(true);
@@ -250,16 +244,11 @@ export default function App() {
   const fetchAdminUsers = async () => {
     setLoadingAdmin(true);
     try {
-      const { data, error } = await supabase
-        .from('authorized_users')
-        .select('*')
-        .order('expiry_date', { ascending: false });
-
+      const { data, error } = await supabase.from('authorized_users').select('*').order('expiry_date', { ascending: false });
       if (error) throw error;
       setAdminUsersList(data || []);
     } catch (err) {
       console.error(err);
-      alert('Error al cargar la lista de usuarios.');
     } finally {
       setLoadingAdmin(false);
     }
@@ -271,43 +260,24 @@ export default function App() {
       alert('Por favor completa el número y la fecha de expiración.');
       return;
     }
-
     const cleanPhone = newAdminPhone.trim().replace(/^0/, '');
     const userName = newName.trim() || 'Sin Nombre';
-    const formattedExpiry = newAdminExpiry.includes('T') 
-      ? newAdminExpiry 
-      : `${newAdminExpiry}T23:59:59+00:00`;
+    const formattedExpiry = newAdminExpiry.includes('T') ? newAdminExpiry : `${newAdminExpiry}T23:59:59+00:00`;
 
     try {
       if (editingUserId) {
-        const { error } = await supabase
-          .from('authorized_users')
-          .update({ client_name: userName, phone: cleanPhone, expiry_date: formattedExpiry })
-          .eq('id', editingUserId);
-
+        const { error } = await supabase.from('authorized_users').update({ client_name: userName, phone: cleanPhone, expiry_date: formattedExpiry }).eq('id', editingUserId);
         if (error) throw error;
         alert('✅ ¡Usuario actualizado exitosamente!');
       } else {
-        const { error } = await supabase
-          .from('authorized_users')
-          .insert([{ client_name: userName, phone: cleanPhone, expiry_date: formattedExpiry, is_active: true }]);
-
+        const { error } = await supabase.from('authorized_users').insert([{ client_name: userName, phone: cleanPhone, expiry_date: formattedExpiry, is_active: true }]);
         if (error) throw error;
         alert('✅ ¡Usuario registrado exitosamente!');
       }
-
-      setNewName('');
-      setNewAdminPhone('');
-      setNewAdminExpiry('');
-      setEditingUserId(null);
+      setNewName(''); setNewAdminPhone(''); setNewAdminExpiry(''); setEditingUserId(null);
       fetchAdminUsers();
     } catch (err) {
-      console.error(err);
-      if (err.code === '23505') {
-        alert('⚠️ Este número de teléfono ya está registrado.');
-      } else {
-        alert(`⚠️ Error de Supabase: ${err.message}`);
-      }
+      alert(`⚠️ Error: ${err.message}`);
     }
   };
 
@@ -327,33 +297,24 @@ export default function App() {
 
   const handleDeleteUser = async (id) => {
     if (!window.confirm('¿Deseas eliminar este usuario registrado?')) return;
-
     try {
       const { error } = await supabase.from('authorized_users').delete().eq('id', id);
       if (error) throw error;
       fetchAdminUsers();
     } catch (err) {
-      console.error(err);
       alert('Error al eliminar el usuario.');
     }
   };
 
-  const filteredAdminUsers = adminUsersList.filter(u => {
-    const query = searchQuery.toLowerCase();
-    return (u.client_name || '').toLowerCase().includes(query) || (u.phone || '').toLowerCase().includes(query);
-  });
+  const filteredAdminUsers = adminUsersList.filter(u => (u.client_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.phone || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // PANTALLA DE ACCESO
+  // PANTALLA DE ACCESO Y ADMINISTRADOR
   if (!isAuthenticated) {
     return (
       <div style={{ maxWidth: '480px', margin: 'auto', minHeight: '100vh', backgroundColor: '#faf8f5', color: '#2c3e40', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', boxSizing: 'border-box', position: 'relative' }}>
-        
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px' }}>
           <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
-          <button 
-            onClick={() => setShowPasswordModal(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b9ea6', padding: '4px' }}
-          >
+          <button onClick={() => setShowPasswordModal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b9ea6', padding: '4px' }} title="Panel de Administrador">
             <Settings size={22} />
           </button>
         </header>
@@ -362,174 +323,68 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f0c3', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ebd1a6' }}>
               <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#5b9ea6' }}>⚙️ Panel de Administrador</span>
-              <button 
-                onClick={() => { setIsAdminMode(false); setEditingUserId(null); }}
-                style={{ backgroundColor: '#ffffff', border: '1px solid #ebd1a6', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', color: '#2c3e40' }}
-              >
-                Cerrar Panel ✖
-              </button>
+              <button onClick={() => { setIsAdminMode(false); setEditingUserId(null); }} style={{ backgroundColor: '#ffffff', border: '1px solid #ebd1a6', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar ✖</button>
             </div>
-
             <form onSubmit={handleSaveUser} style={{ backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>
-                {editingUserId ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario'}
-              </span>
-              <input 
-                type="text" 
-                placeholder="Nombre de la usuaria o usuario" 
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
-                required
-              />
-              <input 
-                type="text" 
-                placeholder="Número de Celular (Ej: 593912345678)" 
-                value={newAdminPhone}
-                onChange={(e) => setNewAdminPhone(e.target.value)}
-                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
-                required
-              />
-              <input 
-                type="date" 
-                value={newAdminExpiry}
-                onChange={(e) => setNewAdminExpiry(e.target.value)}
-                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }}
-                required
-              />
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6' }}>{editingUserId ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario'}</span>
+              <input type="text" placeholder="Nombre de la usuaria o usuario" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }} required />
+              <input type="text" placeholder="Número de Celular (Ej: 593912345678)" value={newAdminPhone} onChange={(e) => setNewAdminPhone(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }} required />
+              <input type="date" value={newAdminExpiry} onChange={(e) => setNewAdminExpiry(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px' }} required />
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button 
-                  type="submit"
-                  style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <UserPlus size={14} />
-                  <span>{editingUserId ? 'Actualizar' : 'Guardar Usuario'}</span>
-                </button>
-                {editingUserId && (
-                  <button 
-                    type="button"
-                    onClick={handleCancelEdit}
-                    style={{ backgroundColor: '#ddd', color: '#333', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    Cancelar
-                  </button>
-                )}
+                <button type="submit" style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>{editingUserId ? 'Actualizar' : 'Guardar'}</button>
+                {editingUserId && <button type="button" onClick={handleCancelEdit} style={{ backgroundColor: '#ddd', color: '#333', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>}
               </div>
             </form>
-
-            <div style={{ position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', top: '10px', left: '10px', color: '#888' }} />
-              <input 
-                type="text"
-                placeholder="Buscar usuario..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '8px 8px 8px 32px', borderRadius: '6px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '12px', boxSizing: 'border-box', outline: 'none' }}
-              />
-            </div>
-
+            <input type="text" placeholder="Buscar usuario..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '12px', boxSizing: 'border-box' }} />
             <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', flex: 1, maxHeight: '200px', overflowY: 'auto' }}>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '6px' }}>
-                Usuarios Registrados ({filteredAdminUsers.length}):
-              </span>
-              {loadingAdmin ? (
-                <p style={{ fontSize: '11px', textAlign: 'center' }}>Cargando...</p>
-              ) : filteredAdminUsers.length === 0 ? (
-                <p style={{ fontSize: '11px', color: '#666', textAlign: 'center' }}>No se encontraron usuarios.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {filteredAdminUsers.map((u) => (
-                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: '#faf8f5', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px' }}>
-                      <div>
-                        <strong style={{ color: '#2c3e40', fontSize: '12px' }}>👤 {u.client_name || 'Sin Nombre'}</strong>
-                        <div style={{ color: '#5b9ea6' }}>+{u.phone}</div>
-                        <div style={{ fontSize: '9px', color: '#666' }}>Expira: {u.expiry_date ? u.expiry_date.split('T')[0] : 'Sin límite'}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => handleStartEdit(u)} style={{ background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer' }}>
-                          <Edit2 size={16} />
-                        </button>
-                        <button onClick={() => handleDeleteUser(u.id)} style={{ background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer' }}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              {filteredAdminUsers.map(u => (
+                <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px', borderBottom: '1px solid #eee', fontSize: '11px' }}>
+                  <div><strong>{u.client_name || 'Sin Nombre'}</strong> (+{u.phone})</div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => handleStartEdit(u)} style={{ background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer' }}><Edit2 size={14} /></button>
+                    <button onClick={() => handleDeleteUser(u.id)} style={{ background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, gap: '20px' }}>
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}>
-                <Lock size={32} />
-              </div>
+              <div style={{ padding: '16px', backgroundColor: '#f9f0c3', borderRadius: '50%', border: '1px solid #ebd1a6', color: '#5b9ea6' }}><Lock size={32} /></div>
               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h2>
-              <p style={{ margin: 0, fontSize: '13px', color: '#555', padding: '0 10px', lineHeight: '1.4' }}>
-                Ingresa tu número celular autorizado para iniciar sesión.
-              </p>
+              <p style={{ margin: 0, fontSize: '13px', color: '#555' }}>Ingresa tu número celular autorizado para iniciar sesión.</p>
             </div>
-
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <input
-                type="text"
-                placeholder="Ej: 593912345678"
-                value={inputPhoneCheck}
-                onChange={(e) => setInputPhoneCheck(e.target.value)}
-                style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
-                required
-              />
-              <button
-                type="submit"
-                disabled={loadingLogin}
-                style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-              >
-                <ShieldCheck size={18} />
-                <span>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</span>
-              </button>
+              <input type="text" placeholder="Ej: 593912345678" value={inputPhoneCheck} onChange={(e) => setInputPhoneCheck(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', backgroundColor: '#ffffff', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} required />
+              <button type="submit" disabled={loadingLogin} style={{ width: '100%', backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}>{loadingLogin ? 'Validando...' : 'Ingresar al Sistema'}</button>
             </form>
           </div>
         )}
 
         {showPasswordModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box' }}>
-            <div style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '15px', color: '#5b9ea6' }}>🔒 Clave de Administradora</h3>
-                <button onClick={() => setShowPasswordModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>
-                  <X size={20} />
-                </button>
+                <button onClick={() => setShowPasswordModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={20} /></button>
               </div>
               <form onSubmit={handleVerifyPassword} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input 
-                  type="password" 
-                  placeholder="Contraseña"
-                  value={adminPasswordInput}
-                  onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', fontSize: '14px', outline: 'none' }}
-                  required
-                  autoFocus
-                />
-                <button type="submit" style={{ backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
-                  Ingresar al Panel
-                </button>
+                <input type="password" placeholder="Contraseña" value={adminPasswordInput} onChange={(e) => setAdminPasswordInput(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', fontSize: '14px', outline: 'none' }} required autoFocus />
+                <button type="submit" style={{ backgroundColor: '#5b9ea6', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>Ingresar</button>
               </form>
             </div>
           </div>
         )}
-
       </div>
     );
   }
 
-  // PANTALLA PRINCIPAL
   const totalContacts = filteredExcelData.length;
   const sentCount = Object.values(sentStatuses).filter(Boolean).length;
   const progressPercent = totalContacts > 0 ? Math.round((sentCount / totalContacts) * 100) : 0;
   const previewMessage = excelData.length > 0 ? getProcessedMessage(excelData[0]) : '';
 
-  // Listas únicas para los checkboxes de los 4 campos
   const uniqueStatuses = statusKey ? [...new Set(excelData.map(r => String(r[statusKey] || '').trim()).filter(Boolean))] : [];
   const uniqueLevels = levelKey ? [...new Set(excelData.map(r => String(r[levelKey] || '').trim()).filter(Boolean))] : [];
   const uniqueDebts = debtKey ? [...new Set(excelData.map(r => String(r[debtKey] || '').trim()).filter(Boolean))] : [];
@@ -545,19 +400,7 @@ export default function App() {
             <h1 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#5b9ea6' }}>CelSender Web</h1>
             <span style={{ fontSize: '10px', color: '#666' }}>Licencia: +{loggedPhone} <span style={{ color: '#166534', fontWeight: 'bold' }}>●</span></span>
           </div>
-          <button
-            onClick={() => {
-              if (window.confirm('¿Deseas cerrar sesión?')) {
-                setIsAuthenticated(false);
-                setLoggedPhone('');
-                localStorage.removeItem('celsender_auth');
-                localStorage.removeItem('celsender_logged_phone');
-              }
-            }}
-            style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-          >
-            Cerrar 🔒
-          </button>
+          <button onClick={() => { setIsAuthenticated(false); setLoggedPhone(''); localStorage.removeItem('celsender_auth'); localStorage.removeItem('celsender_logged_phone'); }} style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar 🔒</button>
         </header>
 
         {/* Pasos */}
@@ -571,7 +414,7 @@ export default function App() {
 
         <main style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           
-          {/* PASO 1: CARGAR EXCEL Y LOS 4 FILTROS ESPECÍFICOS */}
+          {/* PASO 1: CARGAR EXCEL Y FILTROS DESPLEGABLES */}
           {currentStep === 1 && (
             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #93c4c8', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -580,12 +423,7 @@ export default function App() {
               </div>
 
               <div>
-                <input 
-                  type="file" 
-                  accept=".xlsx, .xls, .csv" 
-                  onChange={handleExcelUpload} 
-                  style={{ fontSize: '11px', color: '#2c3e40' }} 
-                />
+                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} style={{ fontSize: '11px', color: '#2c3e40' }} />
               </div>
 
               {excelColumns.length > 0 && (
@@ -594,116 +432,147 @@ export default function App() {
                     🎯 Segmentar envíos ({filteredExcelData.length} de {excelData.length} seleccionados):
                   </span>
 
-                  {/* 1. FILTRO DE ESTATUS */}
+                  {/* 1. DESPLEGABLE DE ESTATUS */}
                   {statusKey && uniqueStatuses.length > 0 && (
-                    <div style={{ backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>Filtrar por Estatus ({statusKey}):</span>
-                        <button onClick={() => setSelectedStatuses(uniqueStatuses)} style={{ fontSize: '9px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', textDecoration: 'underline' }}>Seleccionar Todos</button>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '70px', overflowY: 'auto' }}>
-                        {uniqueStatuses.map(item => (
-                          <label key={item} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedStatuses.includes(item)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedStatuses([...selectedStatuses, item]);
-                                } else {
-                                  setSelectedStatuses(selectedStatuses.filter(s => s !== item));
-                                }
-                              }}
-                            />
-                            {item}
-                          </label>
-                        ))}
-                      </div>
+                    <div style={{ position: 'relative' }}>
+                      <button 
+                        type="button"
+                        onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                        style={{ width: '100%', backgroundColor: '#fff', border: '1px solid #93c4c8', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: '#2c3e40', fontWeight: 'bold' }}
+                      >
+                        <span>📋 Estatus: {selectedStatuses.length === 0 ? 'Todos (Sin filtrar)' : `${selectedStatuses.length} seleccionados`}</span>
+                        <ChevronDown size={14} />
+                      </button>
+
+                      {openDropdown === 'status' && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #93c4c8', borderRadius: '6px', marginTop: '4px', zIndex: 100, padding: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>
+                            <button type="button" onClick={() => setSelectedStatuses(uniqueStatuses)} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', fontWeight: 'bold' }}>Seleccionar Todos</button>
+                            <button type="button" onClick={() => setSelectedStatuses([])} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer', fontWeight: 'bold' }}>Limpiar</button>
+                          </div>
+                          <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {uniqueStatuses.map(item => (
+                              <label key={item} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 0' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStatuses.includes(item)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setSelectedStatuses([...selectedStatuses, item]);
+                                    else setSelectedStatuses(selectedStatuses.filter(s => s !== item));
+                                  }}
+                                />
+                                {item}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* 2. FILTRO DE NIVEL */}
+                  {/* 2. DESPLEGABLE DE NIVEL */}
                   {levelKey && uniqueLevels.length > 0 && (
-                    <div style={{ backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>Filtrar por Nivel ({levelKey}):</span>
-                        <button onClick={() => setSelectedLevels(uniqueLevels)} style={{ fontSize: '9px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', textDecoration: 'underline' }}>Seleccionar Todos</button>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '70px', overflowY: 'auto' }}>
-                        {uniqueLevels.map(item => (
-                          <label key={item} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedLevels.includes(item)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedLevels([...selectedLevels, item]);
-                                } else {
-                                  setSelectedLevels(selectedLevels.filter(l => l !== item));
-                                }
-                              }}
-                            />
-                            {item}
-                          </label>
-                        ))}
-                      </div>
+                    <div style={{ position: 'relative' }}>
+                      <button 
+                        type="button"
+                        onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
+                        style={{ width: '100%', backgroundColor: '#fff', border: '1px solid #93c4c8', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: '#2c3e40', fontWeight: 'bold' }}
+                      >
+                        <span>⭐ Nivel: {selectedLevels.length === 0 ? 'Todos (Sin filtrar)' : `${selectedLevels.length} seleccionados`}</span>
+                        <ChevronDown size={14} />
+                      </button>
+
+                      {openDropdown === 'level' && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #93c4c8', borderRadius: '6px', marginTop: '4px', zIndex: 100, padding: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>
+                            <button type="button" onClick={() => setSelectedLevels(uniqueLevels)} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', fontWeight: 'bold' }}>Seleccionar Todos</button>
+                            <button type="button" onClick={() => setSelectedLevels([])} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer', fontWeight: 'bold' }}>Limpiar</button>
+                          </div>
+                          <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {uniqueLevels.map(item => (
+                              <label key={item} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 0' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLevels.includes(item)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setSelectedLevels([...selectedLevels, item]);
+                                    else setSelectedLevels(selectedLevels.filter(l => l !== item));
+                                  }}
+                                />
+                                {item}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* 3. FILTRO DE DEUDA */}
+                  {/* 3. DESPLEGABLE DE DEUDA */}
                   {debtKey && uniqueDebts.length > 0 && (
-                    <div style={{ backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>Filtrar por Deuda / Saldo ({debtKey}):</span>
-                        <button onClick={() => setSelectedDebts(uniqueDebts)} style={{ fontSize: '9px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', textDecoration: 'underline' }}>Seleccionar Todos</button>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '70px', overflowY: 'auto' }}>
-                        {uniqueDebts.map(item => (
-                          <label key={item} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedDebts.includes(item)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedDebts([...selectedDebts, item]);
-                                } else {
-                                  setSelectedDebts(selectedDebts.filter(d => d !== item));
-                                }
-                              }}
-                            />
-                            {item}
-                          </label>
-                        ))}
-                      </div>
+                    <div style={{ position: 'relative' }}>
+                      <button 
+                        type="button"
+                        onClick={() => setOpenDropdown(openDropdown === 'debt' ? null : 'debt')}
+                        style={{ width: '100%', backgroundColor: '#fff', border: '1px solid #93c4c8', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: '#2c3e40', fontWeight: 'bold' }}
+                      >
+                        <span>💰 Deuda: {selectedDebts.length === 0 ? 'Todas (Sin filtrar)' : `${selectedDebts.length} seleccionadas`}</span>
+                        <ChevronDown size={14} />
+                      </button>
+
+                      {openDropdown === 'debt' && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #93c4c8', borderRadius: '6px', marginTop: '4px', zIndex: 100, padding: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>
+                            <button type="button" onClick={() => setSelectedDebts(uniqueDebts)} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#5b9ea6', cursor: 'pointer', fontWeight: 'bold' }}>Seleccionar Todas</button>
+                            <button type="button" onClick={() => setSelectedDebts([])} style={{ fontSize: '10px', background: 'none', border: 'none', color: '#e06d6d', cursor: 'pointer', fontWeight: 'bold' }}>Limpiar</button>
+                          </div>
+                          <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {uniqueDebts.map(item => (
+                              <label key={item} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 0' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDebts.includes(item)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setSelectedDebts([...selectedDebts, item]);
+                                    else setSelectedDebts(selectedDebts.filter(d => d !== item));
+                                  }}
+                                />
+                                {item}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* 4. FILTRO DE CUMPLEAÑOS (Por fecha o texto) */}
+                  {/* 4. CUMPLEAÑOS */}
                   {bdayKey && (
-                    <div style={{ backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #ddd', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>Filtrar por Cumpleaños ({bdayKey}):</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>🎁 Filtrar por Cumpleaños ({bdayKey}):</span>
                       <input
                         type="text"
-                        placeholder="Ej: 17/05 o escribe la fecha de hoy..."
+                        placeholder="Ej: 17/05 o fecha de hoy..."
                         value={birthdayFilter}
                         onChange={(e) => setBirthdayFilter(e.target.value)}
                         style={{ padding: '6px', borderRadius: '6px', border: '1px solid #93c4c8', fontSize: '11px', outline: 'none' }}
                       />
-                      <span style={{ fontSize: '9px', color: '#666' }}>Puedes poner el día exacto o dejarlo en blanco para ver todos.</span>
                     </div>
                   )}
 
-                  {/* Botón para limpiar todos los filtros */}
+                  {/* Botón limpiar filtros */}
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedStatuses([]);
                       setSelectedLevels([]);
                       setSelectedDebts([]);
                       setBirthdayFilter('');
+                      setOpenDropdown(null);
                     }}
                     style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '6px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}
                   >
-                    🔄 Limpiar Filtros
+                    🔄 Limpiar Todos los Filtros
                   </button>
 
                 </div>
@@ -738,11 +607,7 @@ export default function App() {
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '80px', overflowY: 'auto' }}>
                     {excelColumns.map((col) => (
-                      <button
-                        key={col}
-                        onClick={() => insertVariable(col)}
-                        style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', border: '1px solid #ebd1a6', cursor: 'pointer' }}
-                      >
+                      <button key={col} onClick={() => insertVariable(col)} style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', border: '1px solid #ebd1a6', cursor: 'pointer' }}>
                         +{col}
                       </button>
                     ))}
@@ -752,42 +617,20 @@ export default function App() {
 
               <div>
                 <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6', display: 'block', marginBottom: '4px' }}>Redacta tu mensaje:</span>
-                <textarea
-                  rows="4"
-                  placeholder="Ej: Hola {Nombre}, feliz cumpleaños..."
-                  value={messageTemplate}
-                  onChange={(e) => setMessageTemplate(e.target.value)}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#faf8f5', fontSize: '12px', outline: 'none', color: '#2c3e40', boxSizing: 'border-box' }}
-                />
+                <textarea rows="4" placeholder="Ej: Hola {Nombre}..." value={messageTemplate} onChange={(e) => setMessageTemplate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #93c4c8', backgroundColor: '#faf8f5', fontSize: '12px', outline: 'none', color: '#2c3e40', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #86efac' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '3px' }}>
-                  👁️ Vista previa:
-                </span>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '3px' }}>👁️ Vista previa:</span>
                 <p style={{ margin: 0, fontSize: '11px', color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.4' }}>
                   {previewMessage || <span style={{ color: '#888', fontStyle: 'italic' }}>Escribe algo arriba...</span>}
                 </p>
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setCurrentStep(1)}
-                  style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <ArrowLeft size={14} />
-                  <span>Atrás</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (filteredExcelData.length === 0) { alert('No hay contactos seleccionados.'); setCurrentStep(1); return; }
-                    if (!messageTemplate.trim()) { alert('Por favor escribe un mensaje.'); return; }
-                    setCurrentStep(3);
-                  }}
-                  style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <span>Ir a Envíos ({filteredExcelData.length})</span>
-                  <ArrowRight size={14} />
+                <button onClick={() => setCurrentStep(1)} style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Atrás</button>
+                <button onClick={() => { if (filteredExcelData.length === 0) { alert('No hay contactos.'); setCurrentStep(1); return; } if (!messageTemplate.trim()) { alert('Escribe un mensaje.'); return; } setCurrentStep(3); }} style={{ flex: 1, backgroundColor: '#5b9ea6', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  Ir a Envíos ({filteredExcelData.length})
                 </button>
               </div>
             </div>
@@ -801,9 +644,7 @@ export default function App() {
                   <Send size={18} style={{ color: '#5b9ea6' }} />
                   <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#5b9ea6' }}>Centro de Envíos</h2>
                 </div>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>
-                  {sentCount} / {totalContacts} enviados ({progressPercent}%)
-                </span>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#5b9ea6' }}>{sentCount} / {totalContacts} enviados ({progressPercent}%)</span>
               </div>
 
               <div style={{ width: '100%', backgroundColor: '#eee', borderRadius: '6px', height: '8px', overflow: 'hidden' }}>
@@ -829,23 +670,10 @@ export default function App() {
                       <div style={{ overflow: 'hidden', marginRight: '8px', flex: 1 }}>
                         <strong style={{ color: '#2c3e40', display: 'block', fontSize: '12px' }}>👤 {clientName}</strong>
                         <span style={{ color: '#5b9ea6', fontSize: '10px', display: 'block' }}>+{finalPhone}</span>
-                        <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          💬 "{message || 'Escribe un mensaje...'}"
-                        </p>
+                        <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>💬 "{message}"</p>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button
-                          onClick={() => {
-                            if (!loggedPhone) {
-                              alert('⚠️ Sesión no válida.');
-                              setIsAuthenticated(false);
-                              return;
-                            }
-                            window.open(whatsappUrl, '_blank');
-                            setSentStatuses(prev => ({ ...prev, [index]: true }));
-                          }}
-                          style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}
-                        >
+                        <button onClick={() => { if (!loggedPhone) { alert('⚠️ Sesión no válida.'); setIsAuthenticated(false); return; } window.open(whatsappUrl, '_blank'); setSentStatuses(prev => ({ ...prev, [index]: true })); }} style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
                           <Send size={12} />
                           <span>{isSent ? 'Reenviar' : 'Enviar'}</span>
                         </button>
@@ -857,24 +685,9 @@ export default function App() {
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setCurrentStep(2)}
-                  style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <ArrowLeft size={14} />
-                  <span>Atrás</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('¿Deseas reiniciar el progreso de envíos?')) {
-                      setSentStatuses({});
-                      localStorage.removeItem('celsender_progress');
-                    }
-                  }}
-                  style={{ flex: 1, backgroundColor: '#e06d6d', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <RotateCcw size={14} />
-                  <span>Reiniciar Progreso</span>
+                <button onClick={() => setCurrentStep(2)} style={{ backgroundColor: '#f9f0c3', color: '#2c3e40', border: '1px solid #ebd1a6', padding: '9px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Atrás</button>
+                <button onClick={() => { if (window.confirm('¿Reiniciar progreso?')) { setSentStatuses({}); localStorage.removeItem('celsender_progress'); } }} style={{ flex: 1, backgroundColor: '#e06d6d', color: '#ffffff', border: 'none', padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <RotateCcw size={14} /> Reiniciar Progreso
                 </button>
               </div>
             </div>
@@ -888,12 +701,7 @@ export default function App() {
         </footer>
 
         {/* Botón flotante WhatsApp */}
-        <a
-          href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#ffffff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000 }}
-        >
+        <a href="https://wa.me/593939669413?text=Hola%20Celia,%20tengo%20una%20duda%20sobre%20CelSender" target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#25D366', color: '#ffffff', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 1000 }}>
           <MessageCircle size={28} />
         </a>
       </div>
